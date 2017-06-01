@@ -1,3 +1,6 @@
+using System.Windows.Forms;
+using SteamSDK;
+
 namespace SEModAPIExtensions.API
 {
 	using System;
@@ -8,6 +11,9 @@ namespace SEModAPIExtensions.API
 	using System.Reflection;
 	using System.Runtime.InteropServices;
 	using System.Threading;
+	using Sandbox;
+	using SEModAPI.API;
+	using SEModAPI.API.Sandbox;
 	using SEModAPIExtensions.API.Plugin;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid;
@@ -26,6 +32,7 @@ namespace SEModAPIExtensions.API
 		private double _averageEvents;
 		private List<ulong> _lastConnectedPlayerList;
 		private readonly Dictionary<Guid, string> _pluginPaths;
+	    public static bool IsStable;
 
 		#region "Constructors and Initializers"
 
@@ -84,15 +91,21 @@ namespace SEModAPIExtensions.API
 
 				string modsPath = Path.Combine( Server.Instance.Path, "Mods" );
 				ApplicationLog.BaseLog.Info( "Scanning: {0}", modsPath );
-				if ( !Directory.Exists( modsPath ) )
-					return;
+			    if ( !Directory.Exists( modsPath ) )
+			    {
+                    ApplicationLog.BaseLog.Error( "Invalid directory" );
+                    return;
+			    }
 
 				string[ ] files = Directory.GetFiles( modsPath, "*.dll", SearchOption.AllDirectories );
+                if(files.Length==0)
+                    ApplicationLog.BaseLog.Info( "Found no dll files" );
+
 				foreach ( string file in files )
 				{
-
 					try
 					{
+                        ApplicationLog.BaseLog.Info( $"Trying to load {file}" );
 						// Load assembly from file into memory, so we can hotswap it if we want
 						byte[ ] b = File.ReadAllBytes( file );
 						Assembly pluginAssembly = Assembly.Load( b );
@@ -103,7 +116,7 @@ namespace SEModAPIExtensions.API
 							else
 								continue;
 						}
-
+                        ApplicationLog.BaseLog.Info( $"Loaded assembly {pluginAssembly.FullName}" );
 						//Get the assembly GUID
 						GuidAttribute guid = (GuidAttribute)pluginAssembly.GetCustomAttributes( typeof( GuidAttribute ), true )[ 0 ];
 						Guid guidValue = new Guid( guid.Value );
@@ -202,7 +215,7 @@ namespace SEModAPIExtensions.API
 		public void Init( )
 		{
 			ApplicationLog.BaseLog.Info( "Initializing plugins ..." );
-			Initialized = true;
+            Initialized = true;
 
 			foreach ( Guid key in Plugins.Keys )
 			{
@@ -218,7 +231,7 @@ namespace SEModAPIExtensions.API
 				return;
 			if ( !Initialized )
 				return;
-			if ( !SandboxGameAssemblyWrapper.Instance.IsGameStarted )
+			if ( !MySandboxGameWrapper.IsGameStarted )
 				return;
 
 			_lastUpdateTime = DateTime.Now - _lastUpdate;
@@ -297,7 +310,7 @@ namespace SEModAPIExtensions.API
 			}
 
 			//Capture profiling info if debugging is on
-			if ( SandboxGameAssemblyWrapper.IsDebugging )
+			if ( ExtenderOptions.IsDebugging )
 			{
 				_averageEvents = ( _averageEvents + ( events.Count + chatEvents.Count ) ) / 2;
 
@@ -495,8 +508,41 @@ namespace SEModAPIExtensions.API
 
 			try
 			{
-				object plugin = Plugins[ key ];
-				FieldInfo logField = plugin.GetType( ).GetField( "Log" );
+				IPlugin plugin = Plugins[ key ];
+			    if ( plugin.Name == "Dedicated Server Essentials" )
+			    {
+			        FieldInfo memberInfo = plugin.GetType().GetField( "StableBuild", BindingFlags.Static | BindingFlags.Public );
+			        if (memberInfo != null)
+			        {
+			            bool pluginStable = (bool)memberInfo.GetValue(null);
+			            if (!pluginStable && IsStable)
+			            {
+			                ApplicationLog.Error("WARNING: This version of Essentials is NOT compatible with \"stable\" branch!");
+			                ApplicationLog.Error("Aborting plugin initialization!");
+			                if (SystemInformation.UserInteractive)
+			                {
+			                    MessageBox.Show("WARNING: This version of Essentials is NOT compatible with \"stable\" branch!\r\n" +
+			                                    "Essentials will not load!",
+			                                    "FATAL ERROR", MessageBoxButtons.OK);
+			                }
+			                return;
+			            }
+			            else if (pluginStable && !IsStable)
+			            {
+			                ApplicationLog.Error("WARNING: This version of Essentials is NOT compatible with \"dev\" branch!");
+			                ApplicationLog.Error("Aborting plugin initialization!");
+			                if (SystemInformation.UserInteractive)
+			                {
+			                    MessageBox.Show("WARNING: This version of Essentials is NOT compatible with \"dev\" branch!\r\n" +
+			                                    "Essentials will not load!",
+			                                    "FATAL ERROR", MessageBoxButtons.OK);
+			                }
+			                return;
+			            }
+			        }
+			    }
+
+			    FieldInfo logField = plugin.GetType( ).GetField( "Log" );
 				if ( logField != null )
 				{
 					logField.SetValue( plugin, ApplicationLog.PluginLog, BindingFlags.Static, null, CultureInfo.CurrentCulture );

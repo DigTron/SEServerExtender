@@ -4,6 +4,8 @@ namespace SEModAPIExtensions.API
 	{
 		public bool AutoStart;
 		public string WorldName;
+        /// <summary>The title of the console title</summary>
+        public string ConsoleTitle;
 		/// <summary>The name of the game instance to load</summary>
 		public string InstanceName { get; set; }
 		/// <summary>The path to the instance folder</summary>
@@ -26,5 +28,9 @@ namespace SEModAPIExtensions.API
 		public bool WorldDataModify;
         public bool WorldVoxelModify;
 		public string Args;
+        /// <summary>
+        /// Disable Keen's terrible profiler
+        /// </summary>
+	    public bool NoProfiler;
 	}
 }

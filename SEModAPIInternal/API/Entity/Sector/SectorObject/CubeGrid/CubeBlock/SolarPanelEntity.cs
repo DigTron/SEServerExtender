@@ -3,8 +3,10 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 	using System;
 	using System.ComponentModel;
 	using System.Runtime.Serialization;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
 	using Sandbox.ModAPI.Ingame;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
 
@@ -13,7 +15,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 	{
 		#region "Attributes"
 
-		private PowerProducer m_powerProducer;
 		private float m_maxPowerOutput;
 
 		public static string SolarPanelNamespace = "Sandbox.Game.Entities.Blocks";
@@ -33,7 +34,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 		public SolarPanelEntity( CubeGridEntity parent, MyObjectBuilder_SolarPanel definition, Object backingObject )
 			: base( parent, definition, backingObject )
 		{
-			m_powerProducer = new PowerProducer( Parent.PowerManager, ActualObject );
 		}
 
 		#endregion "Constructors and Intializers"
@@ -53,37 +53,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 			}
 		}
 
-		[DataMember]
-		[Category( "Solar Panel" )]
-		public float MaxPower
-		{
-			get { return PowerProducer.MaxPowerOutput; }
-			set
-			{
-				m_maxPowerOutput = value;
-
-				Action action = InternalUpdateMaxPowerOutput;
-				SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
-			}
-		}
-
-		[DataMember]
-		[Category( "Solar Panel" )]
-		public float Power
-		{
-			get { return PowerProducer.PowerOutput; }
-			set { PowerProducer.PowerOutput = value; }
-		}
-
-		[IgnoreDataMember]
-		[Category( "Solar Panel" )]
-		[Browsable( false )]
-		[ReadOnly( true )]
-		internal PowerProducer PowerProducer
-		{
-			get { return m_powerProducer; }
-		}
-
 		#endregion "Properties"
 
 		#region "Methods"
@@ -97,7 +66,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				Type type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( SolarPanelNamespace, SolarPanelClass );
 				if ( type == null )
 					throw new Exception( "Could not find internal type for SolarPanelEntity" );
-				result &= HasMethod( type, SolarPanelSetMaxOutputMethod );
+				result &= Reflection.HasMethod( type, SolarPanelSetMaxOutputMethod );
 
 				return result;
 			}

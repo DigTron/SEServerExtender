@@ -1,7 +1,9 @@
+using VRage.Game;
+
 namespace SEModAPI.API.Definitions
 {
 	using System.ComponentModel;
-	using Sandbox.Common.ObjectBuilders.Definitions;
+	using global::Sandbox.Common.ObjectBuilders.Definitions;
 	using VRage.ObjectBuilders;
 
 	/// <summary>

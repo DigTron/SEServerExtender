@@ -4,8 +4,10 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 	using System.ComponentModel;
 	using System.Reflection;
 	using System.Runtime.Serialization;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
 	using SEModAPI.API.TypeConverters;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
 	using VRageMath;
@@ -78,8 +80,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null && ActualObject != null )
 				{
-					Action action = InternalUpdateGyroOverride;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateGyroOverride );
 				}
 			}
 		}
@@ -99,8 +100,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null && ActualObject != null )
 				{
-					Action action = InternalUpdateGyroPower;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateGyroPower );
 				}
 			}
 		}
@@ -121,8 +121,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null && ActualObject != null )
 				{
-					Action action = InternalUpdateTargetAngularVelocity;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateTargetAngularVelocity );
 				}
 			}
 		}
@@ -140,10 +139,10 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				Type type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( GyroNamespace, GyroClass );
 				if ( type == null )
 					throw new Exception( "Could not find internal type for GyroEntity" );
-				result &= HasMethod( type, GyroSetOverrideMethod );
-				result &= HasMethod( type, GyroSetPowerMethod );
-				result &= HasMethod( type, GyroSetTargetAngularVelocityMethod );
-				result &= HasField( type, GyroNetworkManagerField );
+				result &= Reflection.HasMethod( type, GyroSetOverrideMethod );
+				result &= Reflection.HasMethod( type, GyroSetPowerMethod );
+				result &= Reflection.HasMethod( type, GyroSetTargetAngularVelocityMethod );
+				result &= Reflection.HasField( type, GyroNetworkManagerField );
 
 				return result;
 			}

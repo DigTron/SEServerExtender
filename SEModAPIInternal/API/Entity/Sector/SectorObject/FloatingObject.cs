@@ -1,9 +1,13 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 {
 	using System;
 	using System.ComponentModel;
 	using System.Runtime.Serialization;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
 
@@ -90,8 +94,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateItem;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateItem );
 				}
 			}
 		}
@@ -200,7 +203,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 				if ( type == null )
 					throw new Exception( "Could not find internal type for FloatingObjectManager" );
 				bool result = true;
-				result &= BaseObject.HasMethod( type, FloatingObjectManagerRemoveFloatingObjectMethod );
+				result &= Reflection.HasMethod( type, FloatingObjectManagerRemoveFloatingObjectMethod );
 
 				return result;
 			}
@@ -215,8 +218,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 		{
 			m_floatingObjectToChange = floatingObject;
 
-			Action action = InternalRemoveFloatingObject;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalRemoveFloatingObject );
 		}
 
 		protected void InternalRemoveFloatingObject( )

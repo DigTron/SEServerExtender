@@ -1,11 +1,18 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 {
 	using System;
 	using System.ComponentModel;
 	using System.Runtime.Serialization;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
+	using Sandbox.Game.Entities;
+	using Sandbox.Game.Entities.Character;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
+	using VRage.ModAPI;
 
 	[DataContract]
 	public class CockpitEntity : ShipControllerEntity
@@ -67,7 +74,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				if ( BackingObject == null || ActualObject == null )
 					return null;
 
-				Object backingPilot = GetPilotEntity( );
+				IMyEntity backingPilot = GetPilotEntity( );
 				if ( backingPilot == null )
 					return null;
 
@@ -110,8 +117,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null && ActualObject != null )
 				{
-					Action action = InternalUpdatePilotEntity;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdatePilotEntity );
 				}
 			}
 		}
@@ -131,8 +137,8 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				//result &= BaseEntity.HasMethod(type, CockpitGetPilotEntityMethod);
 
-				result &= HasMethod( type, CockpitSetPilotEntityMethod );
-				result &= HasField( type, CockpitGetPilotEntityField );
+				result &= Reflection.HasMethod( type, CockpitSetPilotEntityMethod );
+				result &= Reflection.HasField( type, CockpitGetPilotEntityField );
 
 				return result;
 			}
@@ -143,10 +149,10 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 			}
 		}
 
-		protected Object GetPilotEntity( )
+		protected MyCharacter GetPilotEntity( )
 		{
 			//Object result = InvokeEntityMethod(ActualObject, CockpitGetPilotEntityMethod);
-			Object result = GetEntityPropertyValue( ActualObject, CockpitGetPilotEntityField );
+			MyCharacter result = ( (MyCockpit) ActualObject ).Pilot;
 			return result;
 		}
 
@@ -165,8 +171,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 			_weaponStatus = true;
 
-			Action action = InternalFireWeapons;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalFireWeapons );
 		}
 
 		public void StopWeapons( )
@@ -176,8 +181,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 			_weaponStatus = false;
 
-			Action action = InternalStopWeapons;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalStopWeapons );
 		}
 
 		protected void InternalFireWeapons( )

@@ -1,6 +1,8 @@
 namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 {
 	using System;
+	using Sandbox;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
 	using VRageMath;
@@ -49,9 +51,9 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				Type type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( GyroNetworkManagerNamespace, GyroNetworkManagerClass );
 				if ( type == null )
 					throw new Exception( "Could not find internal type for GyroNetworkManager" );
-				result &= BaseObject.HasMethod( type, GyroNetworkManagerBroadcastOverrideMethod );
-				result &= BaseObject.HasMethod( type, GyroNetworkManagerBroadcastPowerMethod );
-				result &= BaseObject.HasMethod( type, GyroNetworkManagerBroadcastTargetAngularVelocityMethod );
+				result &= Reflection.HasMethod( type, GyroNetworkManagerBroadcastOverrideMethod );
+				result &= Reflection.HasMethod( type, GyroNetworkManagerBroadcastPowerMethod );
+				result &= Reflection.HasMethod( type, GyroNetworkManagerBroadcastTargetAngularVelocityMethod );
 
 				return result;
 			}
@@ -64,20 +66,17 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 		public void BroadcastOverride( )
 		{
-			Action action = InternalBroadcastOverride;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalBroadcastOverride );
 		}
 
 		public void BroadcastPower( )
 		{
-			Action action = InternalBroadcastPower;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalBroadcastPower );
 		}
 
 		public void BroadcastTargetAngularVelocity( )
 		{
-			Action action = InternalBroadcastTargetAngularVelocity;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalBroadcastTargetAngularVelocity );
 		}
 
 		#region "Internal"

@@ -1,20 +1,28 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 {
-	using System;
-	using System.Collections.Generic;
-	using System.ComponentModel;
-	using System.IO;
-	using System.Runtime.Serialization;
-	using Microsoft.Xml.Serialization.GeneratedAssembly;
-	using Sandbox.Common.ObjectBuilders;
-	using Sandbox.Definitions;
-	using SEModAPIInternal.API.Common;
-	using SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid;
-	using SEModAPIInternal.API.Utility;
-	using SEModAPIInternal.Support;
-	using VRageMath;
+    using System;
+    using System.Collections.Generic;
+    using System.ComponentModel;
+    using System.IO;
+    using System.Runtime.Serialization;
+    using Sandbox;
+    using Sandbox.Common.ObjectBuilders;
+    using Sandbox.Definitions;
+    using Sandbox.Game.Entities;
+    using Sandbox.Game.Entities.Cube;
+    using Sandbox.ModAPI;
+    using SEModAPI.API;
+    using SEModAPI.API.Utility;
+    using SEModAPIInternal.API.Common;
+    using SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid;
+    using SEModAPIInternal.API.Utility;
+    using SEModAPIInternal.Support;
+    using VRage.ObjectBuilders;
+    using VRageMath;
 
-	[DataContract( Name = "CubeGridEntityProxy" )]
+    [DataContract( Name = "CubeGridEntityProxy" )]
 	[KnownType( "KnownTypes" )]
 	public class CubeGridEntity : BaseEntity
 	{
@@ -57,7 +65,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 		}
 
 		public CubeGridEntity( FileInfo prefabFile )
-			: base( BaseObjectManager.LoadContentFile<MyObjectBuilder_CubeGrid, MyObjectBuilder_CubeGridSerializer>( prefabFile ) )
+			: base( BaseObjectManager.LoadContentFile<MyObjectBuilder_CubeGrid>( prefabFile ) )
 		{
 			EntityId = 0;
 			ObjectBuilder.EntityId = 0;
@@ -254,23 +262,23 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 			}
 		}
 
-		[DataMember]
-		[Category( "Cube Grid" )]
-		public bool IsDampenersEnabled
-		{
-			get { return ObjectBuilder.DampenersEnabled; }
-			set
-			{
-				if ( ObjectBuilder.DampenersEnabled == value ) return;
-				ObjectBuilder.DampenersEnabled = value;
-				Changed = true;
+		//[DataMember]
+		//[Category( "Cube Grid" )]
+		//public bool IsDampenersEnabled
+		//{
+		//	get { return ObjectBuilder.DampenersEnabled; }
+		//	set
+		//	{
+		//		if ( ObjectBuilder.DampenersEnabled == value ) return;
+		//		ObjectBuilder.DampenersEnabled = value;
+		//		Changed = true;
 
-				if ( ThrusterManager != null )
-				{
-					ThrusterManager.DampenersEnabled = value;
-				}
-			}
-		}
+		//		if ( ThrusterManager != null )
+		//		{
+		//			ThrusterManager.DampenersEnabled = value;
+		//		}
+		//	}
+		//}
 
 		[IgnoreDataMember]
 		[Category( "Cube Grid" )]
@@ -338,31 +346,18 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 			}
 		}
 
-		[IgnoreDataMember]
-		[Category( "Cube Grid" )]
-		[Browsable( false )]
-		[ReadOnly( true )]
-		public PowerManager PowerManager
-		{
-			get { return _managerManager.PowerManager; }
-			private set
-			{
-				//Do nothing!
-			}
-		}
-
-		[IgnoreDataMember]
-		[Category( "Cube Grid" )]
-		[Browsable( false )]
-		[ReadOnly( true )]
-		public CubeGridThrusterManager ThrusterManager
-		{
-			get { return _managerManager.ThrusterManager; }
-			private set
-			{
-				//Do nothing!
-			}
-		}
+		//[IgnoreDataMember]
+		//[Category( "Cube Grid" )]
+		//[Browsable( false )]
+		//[ReadOnly( true )]
+		//public CubeGridThrusterManager ThrusterManager
+		//{
+		//	get { return _managerManager.ThrusterManager; }
+		//	private set
+		//	{
+		//		//Do nothing!
+		//	}
+		//}
 
 		[IgnoreDataMember]
 		[Category( "Cube Grid" )]
@@ -383,30 +378,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 			}
 		}
 
-		[IgnoreDataMember]
-		[Category( "Cube Grid" )]
-		[ReadOnly( true )]
-		public float TotalPower
-		{
-			get { return PowerManager.TotalPower; }
-			private set
-			{
-				//Do nothing!
-			}
-		}
-
-		[IgnoreDataMember]
-		[Category( "Cube Grid" )]
-		[ReadOnly( true )]
-		public float AvailablePower
-		{
-			get { return PowerManager.AvailablePower; }
-			private set
-			{
-				//Do nothing!
-			}
-		}
-
 		#endregion "Properties"
 
 		#region "Methods"
@@ -418,7 +389,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 
 		public override void Dispose( )
 		{
-			if ( SandboxGameAssemblyWrapper.IsDebugging )
+			if ( ExtenderOptions.IsDebugging )
 				ApplicationLog.BaseLog.Debug( "Disposing CubeGridEntity '" + Name + "' ..." );
 
 			//Dispose the cube grid by disposing all of the blocks
@@ -430,7 +401,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 			{
 				cubeBlock.Dispose();
 			}
-			if (SandboxGameAssemblyWrapper.IsDebugging)
+			if (ExtenderOptions.IsDebugging)
 				ApplicationLog.BaseLog.Debug("Disposed " + blockCount.ToString() + " blocks on CubeGridEntity '" + Name + "'");
 			*/
 			//Broadcast the removal to the clients just to save processing time for the clients
@@ -457,7 +428,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 		{
 			RefreshBaseCubeBlocks( );
 
-			BaseObjectManager.SaveContentFile<MyObjectBuilder_CubeGrid, MyObjectBuilder_CubeGridSerializer>( ObjectBuilder, fileInfo );
+			MyObjectBuilderSerializer.SerializeXML( fileInfo.FullName, false, ObjectBuilder );
 		}
 
 		new public MyObjectBuilder_CubeGrid Export( )
@@ -475,10 +446,10 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 				if ( type == null )
 					throw new Exception( "Could not find internal type for CubeGridEntity" );
 				bool result = true;
-				result &= HasMethod( type, CubeGridGetCubeBlocksHashSetMethod );
-				result &= HasMethod( type, CubeGridAddCubeBlockMethod );
-				result &= HasMethod( type, CubeGridRemoveCubeBlockMethod );
-				result &= HasMethod( type, CubeGridGetManagerManagerMethod );
+				result &= Reflection.HasMethod( type, CubeGridGetCubeBlocksHashSetMethod );
+				result &= Reflection.HasMethod( type, CubeGridAddCubeBlockMethod );
+				result &= Reflection.HasMethod( type, CubeGridRemoveCubeBlockMethod );
+				result &= Reflection.HasMethod( type, CubeGridGetManagerManagerMethod );
 				//result &= HasField( type, CubeGridBlockGroupsField );
 
 				return result;
@@ -510,16 +481,14 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 		{
 			_cubeBlockToAddRemove = cubeBlock;
 
-			Action action = InternalAddCubeBlock;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalAddCubeBlock );
 		}
 
 		public void DeleteCubeBlock( CubeBlockEntity cubeBlock )
 		{
 			_cubeBlockToAddRemove = cubeBlock;
 
-			Action action = InternalRemoveCubeBlock;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalRemoveCubeBlock );
 		}
 
 		protected void RefreshBaseCubeBlocks( )
@@ -543,6 +512,9 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 			{
 				block.Repair( );
 			}
+            MyCubeGrid newEntity = (MyCubeGrid)Entity;
+            foreach ( MySlimBlock slimBlock in newEntity.CubeBlocks )
+                newEntity.ResetBlockSkeleton( slimBlock, true );            
 		}
 
 		#region "Internal"

@@ -1,7 +1,8 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Common
 {
 	using Sandbox.Common.ObjectBuilders;
-	using Sandbox.Common.ObjectBuilders.Voxels;
 	using SEModAPIInternal.API.Entity.Sector.SectorObject;
 
 	public class EntityRegistry : GameObjectRegistry
@@ -20,7 +21,7 @@ namespace SEModAPIInternal.API.Common
 			Register( typeof( MyObjectBuilder_CubeGrid ), typeof( CubeGridEntity ) );
 			Register( typeof( MyObjectBuilder_FloatingObject ), typeof( FloatingObject ) );
 			Register( typeof( MyObjectBuilder_Meteor ), typeof( Meteor ) );
-			Register( typeof( MyObjectBuilder_VoxelMap ), typeof( VoxelMap ) );
+			//Register( typeof( MyObjectBuilder_VoxelMap ), typeof( VoxelMap ) );
 		}
 
 		#endregion "Constructors and Initializers"

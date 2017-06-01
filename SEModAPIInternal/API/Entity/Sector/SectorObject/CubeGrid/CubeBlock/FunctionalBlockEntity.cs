@@ -1,9 +1,14 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 {
 	using System;
 	using System.ComponentModel;
 	using System.Runtime.Serialization;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
+	using SEModAPI.API;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
 	using VRage.ModAPI;
@@ -14,7 +19,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 	{
 		#region "Attributes"
 
-		private PowerReceiver m_powerReceiver;
 		private bool m_enabled;
 
 		public static string FunctionalBlockNamespace = "";
@@ -45,8 +49,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 			: base( parent, definition, backingObject )
 		{
 			m_enabled = definition.Enabled;
-
-			m_powerReceiver = new PowerReceiver( ActualObject, Parent.PowerManager, InternalGetPowerReceiver( ), new Func<float>( InternalPowerReceiverCallback ) );
 		}
 
 		#endregion "Constructors and Initializers"
@@ -99,34 +101,9 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null && ActualObject != null )
 				{
-					Action action = InternalUpdateFunctionalBlock;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateFunctionalBlock );
 				}
 			}
-		}
-
-		[DataMember]
-		[Category( "Functional Block" )]
-		[ReadOnly( true )]
-		public float CurrentInput
-		{
-			get
-			{
-				return PowerReceiver.CurrentInput;
-			}
-			private set
-			{
-				//Do nothing!
-			}
-		}
-
-		[IgnoreDataMember]
-		[Category( "Functional Block" )]
-		[Browsable( false )]
-		[ReadOnly( true )]
-		internal PowerReceiver PowerReceiver
-		{
-			get { return m_powerReceiver; }
 		}
 
 		#endregion "Properties"
@@ -143,10 +120,10 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				if ( type == null )
 					throw new Exception( "Could not find internal type for FunctionalBlockEntity" );
 
-				result &= HasMethod( type, FunctionalBlockGetEnabledMethod );
-				result &= HasMethod( type, FunctionalBlockSetEnabledMethod );
-				result &= HasMethod( type, FunctionalBlockBroadcastEnabledMethod );
-				result &= HasMethod( type, FunctionalBlockCheckIsWorkingMethod );
+				result &= Reflection.HasMethod( type, FunctionalBlockGetEnabledMethod );
+				result &= Reflection.HasMethod( type, FunctionalBlockSetEnabledMethod );
+				result &= Reflection.HasMethod( type, FunctionalBlockBroadcastEnabledMethod );
+				result &= Reflection.HasMethod( type, FunctionalBlockCheckIsWorkingMethod );
 				//result &= HasMethod(type, FunctionalBlockGetPowerReceiverMethod);
 
 				return result;
@@ -204,10 +181,10 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 		protected virtual Object InternalGetPowerReceiver( )
 		{
-			bool oldDebuggingSetting = SandboxGameAssemblyWrapper.IsDebugging;
-			SandboxGameAssemblyWrapper.IsDebugging = false;
-			bool hasPowerReceiver = HasMethod( ActualObject.GetType( ), FunctionalBlockGetPowerReceiverMethod );
-			SandboxGameAssemblyWrapper.IsDebugging = oldDebuggingSetting;
+			bool oldDebuggingSetting = ExtenderOptions.IsDebugging;
+			ExtenderOptions.IsDebugging = false;
+			bool hasPowerReceiver = Reflection.HasMethod( ActualObject.GetType( ), FunctionalBlockGetPowerReceiverMethod );
+			ExtenderOptions.IsDebugging = oldDebuggingSetting;
 			if ( !hasPowerReceiver )
 				return null;
 

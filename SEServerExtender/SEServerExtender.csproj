@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>SEServerExtender</RootNamespace>
     <AssemblyName>SEServerExtender</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <TargetFrameworkProfile>
     </TargetFrameworkProfile>
     <FileAlignment>512</FileAlignment>
@@ -59,38 +59,56 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
-    <OutputPath>bin\x64\Debug\</OutputPath>
+    <OutputPath>..\bin\x64\DedicatedServer64\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DebugType>full</DebugType>
     <PlatformTarget>x64</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
-    <OutputPath>bin\x64\Release\</OutputPath>
+    <OutputPath>..\bin\x64\DedicatedServer64\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
     <DebugType>pdbonly</DebugType>
     <PlatformTarget>x64</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup>
+    <RunPostBuildEvent>OnBuildSuccess</RunPostBuildEvent>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="NLog, Version=3.2.1.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\NLog.3.2.1\lib\net40\NLog.dll</HintPath>
+    <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
+      <HintPath>..\packages\NLog.4.3.7\lib\net45\NLog.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Sandbox.Common">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\GameLibraries\Sandbox.Common.dll</HintPath>
+      <Private>False</Private>
     </Reference>
-    <Reference Include="Sandbox.Common.XmlSerializers">
-      <HintPath>..\GameLibraries\Sandbox.Common.XmlSerializers.dll</HintPath>
-    </Reference>
-    <Reference Include="Sandbox.Game, Version=0.1.5339.30118, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="Sandbox.Game, Version=0.1.6121.25873, Culture=neutral, processorArchitecture=AMD64">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\GameLibraries\Sandbox.Game.dll</HintPath>
+    </Reference>
+    <Reference Include="Sandbox.Graphics, Version=0.1.6129.40252, Culture=neutral, processorArchitecture=AMD64" />
+    <Reference Include="SpaceEngineers.Game, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\SpaceEngineers.Game.dll</HintPath>
+    </Reference>
+    <Reference Include="SpaceEngineers.ObjectBuilders.XmlSerializers, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\SpaceEngineers.ObjectBuilders.XmlSerializers.dll</HintPath>
+    </Reference>
+    <Reference Include="SteamSDK, Version=0.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\SteamSDK.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
@@ -109,16 +127,30 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\GameLibraries\VRage.dll</HintPath>
     </Reference>
-    <Reference Include="VRage.Game">
+    <Reference Include="VRage.Dedicated, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\VRage.Dedicated.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Game, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\GameLibraries\VRage.Game.dll</HintPath>
     </Reference>
-    <Reference Include="VRage.Library">
+    <Reference Include="VRage.Game.XmlSerializers, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\GameLibraries\VRage.Library.dll</HintPath>
+      <HintPath>..\GameLibraries\VRage.Game.XmlSerializers.dll</HintPath>
     </Reference>
-    <Reference Include="VRage.Math">
+    <Reference Include="VRage.Library, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL" />
+    <Reference Include="VRage.Math, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\GameLibraries\VRage.Math.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Render, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\VRage.Render.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Render11, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\VRage.Render11.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -133,6 +165,26 @@
     <Compile Include="CubeBlockDialog.Designer.cs">
       <DependentUpon>CubeBlockDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="EntityWrappers\BagInventoryWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\BeaconWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\AntennaWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\BatteryWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\ConnectorWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\CubeBlockWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\GyroWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\JumpDriveWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\LandingGearWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\ShipToolWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\SlimBlockWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\FunctionalBlockWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\ThrustWrapper.cs" />
+    <Compile Include="EntityWrappers\BlockWrappers\TurretWrapper.cs" />
+    <Compile Include="EntityWrappers\CharacterWrapper.cs" />
+    <Compile Include="EntityWrappers\CubeGridWrapper.cs" />
+    <Compile Include="EntityWrappers\Factions\FactionMemberWrapper.cs" />
+    <Compile Include="EntityWrappers\Factions\FactionWrapper.cs" />
+    <Compile Include="EntityWrappers\FloatingObjectWrapper.cs" />
+    <Compile Include="EntityWrappers\InventoryItemWrapper.cs" />
     <Compile Include="InventoryItemDialog.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -151,16 +203,19 @@
     <Compile Include="SEServerExtender.Designer.cs">
       <DependentUpon>SEServerExtender.cs</DependentUpon>
     </Compile>
+    <Compile Include="Utility\Extensions.cs" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="CubeBlockDialog.resx">
       <DependentUpon>CubeBlockDialog.cs</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
     <EmbeddedResource Include="InventoryItemDialog.resx">
       <DependentUpon>InventoryItemDialog.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="SEServerExtender.resx">
       <DependentUpon>SEServerExtender.cs</DependentUpon>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
@@ -226,8 +281,14 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>
-    </PostBuildEvent>
+    <PostBuildEvent>copy /Y E:\GitHub\SEServerExtender\bin\x64\DedicatedServer64\NLog.config "C:\Program Files (x86)\Steam\SteamApps\common\SpaceEngineers\DedicatedServer64"
+copy /Y E:\GitHub\SEServerExtender\bin\x64\DedicatedServer64\NLog.dll "C:\Program Files (x86)\Steam\SteamApps\common\SpaceEngineers\DedicatedServer64"
+copy /Y E:\GitHub\SEServerExtender\bin\x64\DedicatedServer64\SEComm.dll "C:\Program Files (x86)\Steam\SteamApps\common\SpaceEngineers\DedicatedServer64"
+copy /Y E:\GitHub\SEServerExtender\bin\x64\DedicatedServer64\SEModAPI.dll "C:\Program Files (x86)\Steam\SteamApps\common\SpaceEngineers\DedicatedServer64"
+copy /Y E:\GitHub\SEServerExtender\bin\x64\DedicatedServer64\SEModAPIExtensions.dll "C:\Program Files (x86)\Steam\SteamApps\common\SpaceEngineers\DedicatedServer64"
+copy /Y E:\GitHub\SEServerExtender\bin\x64\DedicatedServer64\SEModAPIInternal.dll "C:\Program Files (x86)\Steam\SteamApps\common\SpaceEngineers\DedicatedServer64"
+copy /Y E:\GitHub\SEServerExtender\bin\x64\DedicatedServer64\SEServerExtender.exe "C:\Program Files (x86)\Steam\SteamApps\common\SpaceEngineers\DedicatedServer64"
+copy /Y E:\GitHub\SEServerExtender\bin\x64\DedicatedServer64\SEServerExtender.exe.config "C:\Program Files (x86)\Steam\SteamApps\common\SpaceEngineers\DedicatedServer64"</PostBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
     <PreBuildEvent>set textTemplatingPath="%25CommonProgramFiles(x86)%25\Microsoft Shared\TextTemplating\$(VisualStudioVersion)\texttransform.exe"

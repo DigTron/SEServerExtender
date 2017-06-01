@@ -1,11 +1,18 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Common
 {
 	using System;
 	using System.Collections.Generic;
 	using System.ComponentModel;
 	using NLog;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
 	using Sandbox.Common.ObjectBuilders.Definitions;
+	using Sandbox.Game.Multiplayer;
+	using Sandbox.Game.World;
+	using Sandbox.ModAPI;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Entity;
 	using SEModAPIInternal.Support;
 
@@ -56,7 +63,7 @@ namespace SEModAPIInternal.API.Common
 
 		#region "Properties"
 
-		public Object BackingObject
+		public MyFaction BackingObject
 		{
 			get
 			{
@@ -126,18 +133,16 @@ namespace SEModAPIInternal.API.Common
 		{
 			try
 			{
-				Type type1 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( FactionNamespace, FactionClass );
-				if ( type1 == null )
-					throw new Exception( "Could not find internal type for Faction" );
+				Type type1 = typeof ( MyFaction );
 				bool result = true;
-				result &= BaseObject.HasMethod( type1, FactionGetMembersMethod );
-				result &= BaseObject.HasMethod( type1, FactionGetJoinRequestsMethod );
-				result &= BaseObject.HasMethod( type1, FactionAddApplicantMethod );
-				result &= BaseObject.HasMethod( type1, FactionRemoveApplicantMethod );
-				result &= BaseObject.HasMethod( type1, FactionAcceptApplicantMethod );
-				result &= BaseObject.HasMethod( type1, FactionRemoveMemberMethod );
-				result &= BaseObject.HasField( type1, FactionMembersDictionaryField );
-				result &= BaseObject.HasField( type1, FactionJoinRequestsDictionaryField );
+				result &= Reflection.HasMethod( type1, FactionGetMembersMethod );
+				result &= Reflection.HasMethod( type1, FactionGetJoinRequestsMethod );
+				result &= Reflection.HasMethod( type1, FactionAddApplicantMethod );
+				result &= Reflection.HasMethod( type1, FactionRemoveApplicantMethod );
+				result &= Reflection.HasMethod( type1, FactionAcceptApplicantMethod );
+				result &= Reflection.HasMethod( type1, FactionRemoveMemberMethod );
+				result &= Reflection.HasField( type1, FactionMembersDictionaryField );
+				result &= Reflection.HasField( type1, FactionJoinRequestsDictionaryField );
 
 				return result;
 			}
@@ -168,8 +173,7 @@ namespace SEModAPIInternal.API.Common
 				}
 				m_faction.Members.Remove( memberToRemove );
 
-				Action action = InternalRemoveMember;
-				SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+				MySandboxGame.Static.Invoke( InternalRemoveMember );
 			}
 			catch ( Exception ex )
 			{
@@ -372,7 +376,7 @@ namespace SEModAPIInternal.API.Common
 			get { return m_instance ?? ( m_instance = new FactionsManager( ) ); }
 		}
 
-		public Object BackingObject
+		public MyFactionCollection BackingObject
 		{
 			get
 			{
@@ -403,12 +407,12 @@ namespace SEModAPIInternal.API.Common
 				if ( type1 == null )
 					throw new Exception( "Could not find internal type for FactionsManager" );
 				bool result = true;
-				result &= BaseObject.HasMethod( type1, FactionManagerGetFactionCollectionMethod );
-				result &= BaseObject.HasMethod( type1, FactionManagerGetFactionByIdMethod );
-				result &= BaseObject.HasMethod( type1, FactionManagerRemoveFactionByIdMethod );
+				result &= Reflection.HasMethod( type1, FactionManagerGetFactionCollectionMethod );
+				result &= Reflection.HasMethod( type1, FactionManagerGetFactionByIdMethod );
+				result &= Reflection.HasMethod( type1, FactionManagerRemoveFactionByIdMethod );
 
-				result &= BaseObject.HasMethod( type1, FactionNetManagerRemoveFactionMethod );
-				result &= BaseObject.HasMethod( type1, FactionNetManagerRemoveMemberMethod );
+				result &= Reflection.HasMethod( type1, FactionNetManagerRemoveFactionMethod );
+				result &= Reflection.HasMethod( type1, FactionNetManagerRemoveMemberMethod );
 
 				return result;
 			}
@@ -421,9 +425,7 @@ namespace SEModAPIInternal.API.Common
 
 		public MyObjectBuilder_FactionCollection GetSubTypeEntity( )
 		{
-			m_factionCollection = (MyObjectBuilder_FactionCollection)BaseObject.InvokeEntityMethod( BackingObject, FactionManagerGetFactionCollectionMethod );
-
-			return m_factionCollection;
+			return BackingObject.GetObjectBuilder( );
 		}
 
 		protected void RefreshFactions( )
@@ -469,8 +471,7 @@ namespace SEModAPIInternal.API.Common
 			m_factionToModify = id;
 			m_factions.Remove( id );
 
-			Action action = InternalRemoveFaction;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalRemoveFaction );
 		}
 
 		internal void RemoveMember( long factionId, long memberId )
@@ -478,17 +479,14 @@ namespace SEModAPIInternal.API.Common
 			m_factionToModify = factionId;
 			m_memberToModify = memberId;
 
-			Action action = InternalRemoveMember;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalRemoveMember );
 		}
 
 		#region "Internal"
 
-		internal Object InternalGetFactionById( long id )
+		internal MyFaction InternalGetFactionById( long id )
 		{
-			Object internalFaction = BaseObject.InvokeEntityMethod( BackingObject, FactionManagerGetFactionByIdMethod, new object[ ] { id } );
-
-			return internalFaction;
+			return (MyFaction)BackingObject.TryGetFactionById( id );
 		}
 
 		protected void InternalRemoveFaction( )
@@ -506,11 +504,17 @@ namespace SEModAPIInternal.API.Common
 		protected void InternalRemoveMember( )
 		{
 			if ( m_factionToModify == 0 )
+			{
+				ApplicationLog.BaseLog.Warn( "Can't modify faction 0. No such faction." );
 				return;
+			}
 			if ( m_memberToModify == 0 )
+			{
+				ApplicationLog.BaseLog.Warn( "Can't kick player 0. No such player." );
 				return;
+			}
 
-			BaseObject.InvokeEntityMethod( BackingObject, FactionNetManagerRemoveMemberMethod, new object[ ] { m_factionToModify, m_memberToModify } );
+			MyFactionCollection.KickMember( m_factionToModify,m_memberToModify );
 
 			m_factionToModify = 0;
 			m_memberToModify = 0;

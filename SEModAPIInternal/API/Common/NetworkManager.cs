@@ -1,8 +1,11 @@
+using SEModAPIInternal.API.Server;
+
 namespace SEModAPIInternal.API.Common
 {
 	using System;
 	using System.Collections.Generic;
 	using System.Reflection;
+	using Sandbox.Engine.Multiplayer;
 	using SEModAPIInternal.API.Entity;
 	using SEModAPIInternal.API.Utility;
 	using SEModAPIInternal.Support;
@@ -124,15 +127,6 @@ namespace SEModAPIInternal.API.Common
 			get { return m_instance; }
 		}
 
-		public static Type NetworkManagerType
-		{
-			get
-			{
-				Type netManagerType = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( NetworkManagerNamespace, NetworkManagerClass );
-				return netManagerType;
-			}
-		}
-
 		#endregion
 
 		#region "Methods"
@@ -143,9 +137,9 @@ namespace SEModAPIInternal.API.Common
 			{
 				bool result = true;
 
-				Type type = NetworkManagerType;
-				if ( type == null )
-					throw new Exception( "Could not find internal type for NetworkManager" );
+				Type networkManagerWrapper = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( NetworkManagerWrapperNamespace, NetworkManagerWrapperClass );
+				networkManagerWrapper.GetField( NetworkManagerWrapperManagerInstanceField, BindingFlags.Static );
+				BaseObject.GetStaticFieldValue( networkManagerWrapper, NetworkManagerWrapperManagerInstanceField );			
 
 				return result;
 			}
@@ -155,13 +149,11 @@ namespace SEModAPIInternal.API.Common
 				return false;
 			}
 		}
-
-		public static Object GetNetworkManager( )
+		public static MyMultiplayerBase GetNetworkManager( )
 		{
 			try
 			{
-				Type networkManagerWrapper = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( NetworkManagerWrapperNamespace, NetworkManagerWrapperClass );
-				Object networkManager = BaseObject.GetStaticFieldValue( networkManagerWrapper, NetworkManagerWrapperManagerInstanceField );
+				MyMultiplayerBase networkManager = MyMultiplayer.Static;
 
 				return networkManager;
 			}
@@ -176,8 +168,8 @@ namespace SEModAPIInternal.API.Common
 		{
 			try
 			{
-				MethodInfo sendStructMethod = NetworkManagerType.GetMethod( NetworkManagerSendStructMethod, BindingFlags.NonPublic | BindingFlags.Instance );
-
+				Type netManagerType = typeof ( MyMultiplayerBase );
+				MethodInfo sendStructMethod = netManagerType.GetMethod( NetworkManagerSendStructMethod, BindingFlags.NonPublic | BindingFlags.Instance );
 				sendStructMethod = sendStructMethod.MakeGenericMethod( structType );
 
 				var netManager = GetNetworkManager( );

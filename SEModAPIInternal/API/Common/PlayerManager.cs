@@ -1,12 +1,19 @@
-﻿namespace SEModAPIInternal.API.Common
+﻿using System.Diagnostics;
+using Sandbox.Engine.Multiplayer;
+using VRage.Game;
+using VRage.Game.ModAPI;
+
+namespace SEModAPIInternal.API.Common
 {
 	using System;
 	using System.Collections.Generic;
 	using System.Linq;
 	using System.Reflection;
 	using Sandbox;
-	using Sandbox.Common.ObjectBuilders;
+	using Sandbox.Game.Multiplayer;
+	using Sandbox.Game.World;
 	using Sandbox.ModAPI;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Entity;
 	using SEModAPIInternal.API.Server;
 	using SEModAPIInternal.API.Utility;
@@ -177,13 +184,7 @@
 			get { return _instance ?? ( _instance = new PlayerMap( ) ); }
 		}
 
-		public Object BackingObject
-		{
-			get
-			{
-				return PlayerManager.Instance.InternalGetPlayerMap();
-			}
-		}
+		public MyPlayerCollection BackingObject => Sync.Players;
 
 		#endregion
 
@@ -197,19 +198,19 @@
 				if (type1 == null)
 					throw new Exception("Could not find internal type for PlayerMap");
 				bool result = true;
-                result &= BaseObject.HasField(type1, PlayerMapGetPlayerItemMappingField);
-                result &= BaseObject.HasField(type1, PlayerMapGetSteamItemMappingField);
-				result &= BaseObject.HasMethod(type1, PlayerMapGetFastPlayerIdFromSteamIdMethod);
+                result &= Reflection.HasField(type1, PlayerMapGetPlayerItemMappingField);
+                result &= Reflection.HasField(type1, PlayerMapGetSteamItemMappingField);
+				result &= Reflection.HasMethod(type1, PlayerMapGetFastPlayerIdFromSteamIdMethod);
 								
 				Type type2 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType(PlayerMapNamespace, PlayerMapCameraDataClass);
 				if (type2 == null)
 					throw new Exception("Could not find camera data type for PlayerMap");
-				result &= BaseObject.HasField(type2, PlayerMapGetCameraDataField);
+				result &= Reflection.HasField(type2, PlayerMapGetCameraDataField);
 
 				Type type3 = WorldManager.InternalType;
 				if(type3 == null)
 					throw new Exception("Could not find world manager type for PlayerMap");
-				result &= BaseObject.HasField(type3, PlayerMapSessionCameraField);
+				result &= Reflection.HasField(type3, PlayerMapSessionCameraField);
 
 				return result;
 			}
@@ -219,6 +220,17 @@
 				return false;
 			}
 		}
+
+	    public string GetPlayerNameFromPlayerId(long playerId)
+	    {
+	        if (playerId == 0)
+	            return "nobody";
+
+	        var playerDictionary = InternalGetPlayerDictionary();
+	        if (!playerDictionary.ContainsKey(playerId))
+	            return null;
+	        return playerDictionary[playerId].Name;
+	    }
 
         public string GetPlayerNameFromSteamId(ulong steamId)
         {
@@ -643,14 +655,11 @@
 					return false;
 				}
 
-				object playerCollection = PlayerManager.Instance.InternalGetPlayerMap();
+				MyPlayerCollection playerCollection = Sync.Players;
 
 				// This method adds the player to online players, so it's not quite what we want, but the parameters allow us to pull types
 				// This should be replaced by just grabbing playerIdentifierType from elsewhere, but this already took too long
 				MethodInfo createNewPlayerMethod = BaseObject.GetEntityMethod(playerCollection, PlayerMapCreateNewPlayerInternalMethod);
-
-				Type identityType = createNewPlayerMethod.GetParameters()[0].ParameterType;
-				Type networkClientType = createNewPlayerMethod.GetParameters()[1].ParameterType;
 				Type playerIdentifierType = createNewPlayerMethod.GetParameters()[3].ParameterType.GetElementType();
 
 				SandboxGameAssemblyWrapper.Instance.GameAction(() =>
@@ -659,9 +668,9 @@
 					//object networkClient = Activator.CreateInstance(networkClientType, new object[] { steamId });
 
 					// Create Identity
-					object identity = BaseObject.GetEntityMethod(playerCollection, PlayerMapCreateMyIdentity).Invoke(playerCollection, new object[] { playerName, playerId, "Default_Astronaut" });
 
 					// Create MyPlayer.PlayerId type
+
 					object playerIdentifier = Activator.CreateInstance(playerIdentifierType, steamId, 0 );
 
 					// Adding to m_playerIdentityIds should save player to checkpoint
@@ -687,7 +696,7 @@
 				if(playerId == 0)
 					return false;
 
-				object playerCollection = PlayerManager.Instance.InternalGetPlayerMap();
+				MyPlayerCollection playerCollection = Sync.Players;
 				object playerIdentityDictionary = BaseObject.GetEntityFieldValue(playerCollection, PlayerMapGetPlayerItemMappingField);
 				object playerIdentiferDictionary = BaseObject.GetEntityFieldValue(playerCollection, PlayerMapGetSteamItemMappingField);
 				object onlinePlayers = BaseObject.GetEntityFieldValue(playerCollection, PlayerMapPlayerDictionary);
@@ -772,7 +781,7 @@
 		{
 			try
 			{
-				object playerCollection = PlayerManager.Instance.InternalGetPlayerMap();
+				MyPlayerCollection playerCollection = Sync.Players;
 				object playerIdentiferDictionary = BaseObject.GetEntityFieldValue(playerCollection, PlayerMapGetSteamItemMappingField);
 				object onlinePlayers = BaseObject.GetEntityFieldValue(playerCollection, PlayerMapPlayerDictionary);
 
@@ -811,7 +820,7 @@
 		{
 			try
 			{
-				object myPlayerCollection = PlayerManager.Instance.InternalGetPlayerMap();
+				MyPlayerCollection myPlayerCollection = Sync.Players;
 				object myAllIdentities = BaseObject.GetEntityFieldValue(myPlayerCollection, PlayerMapGetPlayerItemMappingField);
 
 				bool result = false;
@@ -914,7 +923,7 @@
 				if (type1 == null)
 					throw new Exception("Could not find internal type for PlayerManager");
 				bool result = true;
-                result &= BaseObject.HasMethod(type1, PlayerManagerPlayerMapField);
+                result &= Reflection.HasMethod(type1, PlayerManagerPlayerMapField);
 
 				return result;
 			}
@@ -925,34 +934,37 @@
 			}
 		}
 
-		public Object InternalGetPlayerMap()
-		{
-            Type type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType(PlayerManagerNamespace, PlayerManagerClass);
-            MethodInfo playerMapHandler = BaseObject.GetStaticMethod(type, PlayerManagerPlayerMapField);
-            Object playerMap = playerMapHandler.Invoke(type, new object[] { });
-            
-			return playerMap;
-		}
-
 		public void KickPlayer(ulong steamId)
 		{
-			ServerNetworkManager.Instance.KickPlayer(steamId);
+            SandboxGameAssemblyWrapper.Instance.GameAction(()=>MyMultiplayer.Static.KickClient( steamId ));
+			//ServerNetworkManager.Instance.KickPlayer(steamId);
 		}
 
 		public void BanPlayer(ulong steamId)
 		{
-			ServerNetworkManager.Instance.SetPlayerBan(steamId, true);
+            SandboxGameAssemblyWrapper.Instance.GameAction(()=>MyMultiplayer.Static.BanClient( steamId, true ));
+			//ServerNetworkManager.Instance.SetPlayerBan(steamId, true);
 		}
 
 		public void UnBanPlayer(ulong steamId)
 		{
-			ServerNetworkManager.Instance.SetPlayerBan(steamId, false);
+            SandboxGameAssemblyWrapper.Instance.GameAction(()=>MyMultiplayer.Static.BanClient( steamId, false ));
+			//ServerNetworkManager.Instance.SetPlayerBan(steamId, false);
 		}
 
+        [Obsolete("Use MySession.Static.IsUserAdmin")]
 		public bool IsUserAdmin(ulong remoteUserId)
 		{
-			return MySandboxGame.ConfigDedicated.Administrators.Any( userId => remoteUserId.ToString( ).Equals( userId ) );
+		    return MySandboxGame.ConfigDedicated.Administrators.Any( userId => remoteUserId.ToString().Equals( userId ) );
+		    //return MyMultiplayer.Static.IsAdmin( remoteUserId );
 		}
+
+        [Obsolete("User MySession.Static.IsUserSpaceMaster")]
+	    public bool IsUserPromoted( ulong remoteUserId )
+	    {
+	        //return MySession.Static.IsUserPromoted( remoteUserId );
+	        return MySession.Static.IsUserSpaceMaster(remoteUserId);
+	    }
 
 		#endregion
 	}

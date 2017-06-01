@@ -1,3 +1,26 @@
+using System.Collections;
+using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
+using Sandbox.Engine.Multiplayer;
+using Sandbox.Game;
+using Sandbox.Game.Entities;
+using Sandbox.Game.Entities.Character;
+using Sandbox.Game.Entities.Cube;
+using Sandbox.ModAPI;
+using SEServerExtender.EntityWrappers;
+using SEServerExtender.EntityWrappers.BlockWrappers;
+using SEServerExtender.EntityWrappers.Factions;
+using SEServerExtender.Utility;
+using VRage;
+using VRage.Game;
+using VRage.Game.Entity;
+using VRage.Game.ModAPI.Ingame;
+using VRage.Groups;
+using VRage.Stats;
+using VRageRender;
+using VRageRender.Utils;
+using IMyInventory = VRage.Game.ModAPI.IMyInventory;
+
 namespace SEServerExtender
 {
 	using System;
@@ -8,9 +31,15 @@ namespace SEServerExtender
 	using System.Text;
 	using System.Threading;
 	using System.Windows.Forms;
+	using Sandbox;
+	using Sandbox.Common;
 	using Sandbox.Definitions;
+	using Sandbox.Game.Multiplayer;
+	using Sandbox.Game.World;
 	using SEModAPI.API;
 	using SEModAPI.API.Definitions;
+	using SEModAPI.API.Sandbox;
+	using SEModAPI.API.Utility;
 	using SEModAPI.Support;
 	using SEModAPIExtensions.API;
 	using SEModAPIExtensions.API.Plugin;
@@ -21,6 +50,8 @@ namespace SEServerExtender
 	using SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid;
 	using SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock;
 	using SEModAPIInternal.Support;
+	using VRage.ModAPI;
+	using VRage.ObjectBuilders;
 	using VRage.Utils;
 	using VRageMath;
 	using Timer = System.Windows.Forms.Timer;
@@ -32,12 +63,14 @@ namespace SEServerExtender
 		//General
 		private static SEServerExtender m_instance;
 		private readonly Server m_server;
-		private List<BaseEntity> m_sectorEntities;
-		private readonly List<CubeGridEntity> m_cubeGridEntities;
-		private readonly List<CharacterEntity> m_characterEntities;
-		private readonly List<VoxelMap> m_voxelMapEntities;
-		private readonly List<FloatingObject> m_floatingObjectEntities;
-		private readonly List<Meteor> m_meteorEntities;
+		private HashSet<MyEntity> m_sectorEntities;
+		private readonly List<MyCubeGrid> m_cubeGridEntities;
+		private readonly List<MyCharacter> m_characterEntities;
+		private readonly List<MyVoxelBase> m_voxelMapEntities;
+        //floating object is MyEntity so we can count MyFloatingObjects and MyInventoryBagEntity
+		private readonly List<MyEntity> m_floatingObjectEntities;
+        //meteors are MyEntity because MyMeteor is private and IMyMeteor is empty
+		private readonly List<MyEntity> m_meteorEntities;
 
 		private int m_chatLineCount = 0;
 		private int m_sortBy = 0;
@@ -49,26 +82,29 @@ namespace SEServerExtender
 		private Timer m_pluginManagerRefreshTimer;
 		private Timer m_statusCheckTimer;
 		private Timer m_statisticsTimer;
+	    private Timer m_profilerTimer;
 		private Timer m_playersTimer;
 		private Timer _genericUpdateTimer = new Timer { Interval = 1000 };
 
 		//Utilities Page
 		private int m_floatingObjectsCount;
 
-		#endregion
+	    private bool m_profilerPaused;
 
-		#region "Constructors and Initializers"
+        #endregion
 
-		public SEServerExtender( Server server )
+        #region "Constructors and Initializers"
+
+        public SEServerExtender( Server server )
 		{
 			m_instance = this;
 			m_server = server;
-			m_sectorEntities = new List<BaseEntity>( );
-			m_cubeGridEntities = new List<CubeGridEntity>( );
-			m_characterEntities = new List<CharacterEntity>( );
-			m_voxelMapEntities = new List<VoxelMap>( );
-			m_floatingObjectEntities = new List<FloatingObject>( );
-			m_meteorEntities = new List<Meteor>( );
+			m_sectorEntities = new HashSet<MyEntity>( );
+			m_cubeGridEntities = new List<MyCubeGrid>( );
+			m_characterEntities = new List<MyCharacter>( );
+			m_voxelMapEntities = new List<MyVoxelBase>( );
+			m_floatingObjectEntities = new List<MyEntity>( );
+			m_meteorEntities = new List<MyEntity>( );
 
 			//Run init functionsS
 			InitializeComponent( );
@@ -111,13 +147,16 @@ namespace SEServerExtender
 			m_statisticsTimer = new Timer { Interval = 1000 };
 			m_statisticsTimer.Tick += StatisticsRefresh;
 
+		    m_profilerTimer = new Timer {Interval = 2000};
+		    m_profilerTimer.Tick += ProfilerRefresh;
+
 			_genericUpdateTimer.Tick += GenericTimerTick;
 
 			/*
 			m_playersTimer = new Timer { Interval = 2000 };
 			m_playersTimer.Tick += PlayersRefresh;
 			*/
-
+            
 			return true;
 		}
 
@@ -132,7 +171,8 @@ namespace SEServerExtender
 			{
 				if ( string.IsNullOrEmpty( m_server.CommandLineArgs.InstancePath ) )
 				{
-					List<String> instanceList = SandboxGameAssemblyWrapper.Instance.GetCommonInstanceList( );
+					List<string> instanceList = GameInstallationInfo.GetCommonInstanceList( );
+					instanceList.Sort();
 					CMB_Control_CommonInstanceList.BeginUpdate( );
 					CMB_Control_CommonInstanceList.Items.AddRange( instanceList.ToArray( ) );
 					if ( CMB_Control_CommonInstanceList.Items.Count > 0 )
@@ -162,13 +202,15 @@ namespace SEServerExtender
 
 		private void OnFormClosing( object sender, EventArgs e )
 		{
+            Server.Instance.StopServer();
 			m_entityTreeRefreshTimer.Stop( );
 			m_chatViewRefreshTimer.Stop( );
 			m_factionRefreshTimer.Stop( );
 			m_pluginManagerRefreshTimer.Stop( );
 			m_statusCheckTimer.Stop( );
 			m_statisticsTimer.Stop( );
-			m_playersTimer.Stop( );
+            m_profilerTimer.Stop();
+			//m_playersTimer.Stop( );
 		}
 
 		#endregion
@@ -177,17 +219,46 @@ namespace SEServerExtender
 
 		#region "General"
 
-		private void StatisticsRefresh( object sender, EventArgs e )
-		{
-			StringBuilder sb = new StringBuilder( );
-			Stats.Generic.WriteTo( sb );
-			Stats.Network.WriteTo( sb );
-			Stats.Timing.WriteTo( sb );
+	    private void StatisticsRefresh(object sender, EventArgs e)
+	    {
+	        StringBuilder sb = new StringBuilder();
 
-			TB_Statistics.Text = sb.ToString( );
-		}
+	        foreach (var statlist in MyRenderStats.m_stats.Values)
+	            foreach (var stat in statlist)
+	                stat.WriteTo(sb);
 
-		private void StatusCheckRefresh( object sender, EventArgs e )
+	        sb.AppendLine(MyMultiplayer.GetMultiplayerStats());
+
+	        TB_Statistics.Text = sb.ToString();
+	    }
+
+	    private Type FindTypeInAllAssemblies(string typeName)
+	    {
+	        var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+	        foreach (var assembly in assemblies)
+	        {
+	            try
+	            {
+	                var types = assembly.GetTypes();
+	                foreach (var type in types)
+	                {
+	                    if (type.FullName == typeName)
+	                    {
+	                        return type;
+	                    }
+	                }
+	            }
+	            catch (System.Reflection.ReflectionTypeLoadException ex)
+	            {
+	                if (ExtenderOptions.IsDebugging)
+	                    foreach (var excep in ex.LoaderExceptions)
+	                        ApplicationLog.Error(excep, "Reflection error in stats. You can probably safely ignore this.");
+	            }
+	        }
+	        return null;
+	    }
+
+	    private void StatusCheckRefresh( object sender, EventArgs e )
 		{
 			UpdateControls( );
 
@@ -204,17 +275,216 @@ namespace SEServerExtender
 
 				if ( !m_statisticsTimer.Enabled )
 					m_statisticsTimer.Start( );
+                
+                if(!m_profilerTimer.Enabled)
+                    m_profilerTimer.Start();
 
 				if ( PG_Control_Server_Properties.SelectedObject != m_server.Config )
 					PG_Control_Server_Properties.SelectedObject = m_server.Config;
 			}
 		}
 
-		#endregion
+	    private void ProfilerRefresh(object sender, EventArgs e)
+	    {
+	        if (m_profilerPaused)
+	            return;
 
-		#region "Control"
+	        var fieldInfo = typeof(MySimpleProfiler).GetField("m_profilingBlocks", BindingFlags.Static | BindingFlags.NonPublic);
+	        if (fieldInfo == null)
+	        {
+	            m_profilerTimer.Stop();
+	            return;
+	        }
 
-		internal void BTN_ServerControl_Start_Click( object sender, EventArgs e )
+	        var blocks = fieldInfo.GetValue(null) as Dictionary<string, MySimpleProfiler.MySimpleProfilingBlock>;
+	        if (blocks == null)
+	        {
+	            m_profilerTimer.Stop();
+	            throw new InvalidCastException();
+	        }
+
+	        var graphicsBlocks = new List<MySimpleProfiler.MySimpleProfilingBlock>();
+	        var blockBlocks = new List<MySimpleProfiler.MySimpleProfilingBlock>();
+	        var otherBlocks = new List<MySimpleProfiler.MySimpleProfilingBlock>();
+	        var unknownBlocks = new List<MySimpleProfiler.MySimpleProfilingBlock>();
+	        var systemBlocks = new List<MySimpleProfiler.MySimpleProfilingBlock>();
+	        var characterBlocks = new List<MySimpleProfiler.MySimpleProfilingBlock>();
+	        var gridBlocks = new List<MySimpleProfiler.MySimpleProfilingBlock>();
+
+	        foreach (var block in blocks.Values.ToArray())
+	        {
+	            switch (block.type)
+	            {
+	                case MySimpleProfiler.MySimpleProfilingBlock.ProfilingBlockType.GRAPHICS:
+	                    graphicsBlocks.Add(block);
+	                    break;
+
+	                case MySimpleProfiler.MySimpleProfilingBlock.ProfilingBlockType.BLOCK:
+	                    switch (block.Name)
+	                    {
+	                        case "Grid":
+	                            systemBlocks.Add(block);
+	                            break;
+
+	                        case "Oxygen":
+	                            systemBlocks.Add(block);
+	                            break;
+
+	                        case "Conveyor":
+	                            systemBlocks.Add(block);
+	                            break;
+
+	                        case "Blocks":
+	                            systemBlocks.Add(block);
+	                            break;
+
+	                        case "Gyro":
+	                            systemBlocks.Add(block);
+	                            break;
+
+	                        case "Scripts":
+	                            systemBlocks.Add(block);
+	                            break;
+
+	                        default:
+                                if(block.Name.StartsWith("Character"))
+                                    characterBlocks.Add(block);
+                                else if ( block.Name.StartsWith( "&&GRID&&" ) )
+                                    gridBlocks.Add( block );
+                                else
+	                                blockBlocks.Add(block);
+	                            break;
+	                    }
+	                    break;
+
+	                case MySimpleProfiler.MySimpleProfilingBlock.ProfilingBlockType.OTHER:
+	                    otherBlocks.Add(block);
+	                    break;
+
+	                default:
+	                    unknownBlocks.Add(block);
+	                    break;
+	            }
+	        }
+
+	        StringBuilder sb = new StringBuilder();
+
+	        graphicsBlocks.Sort((a, b) => b.Average.CompareTo(a.Average));
+	        blockBlocks.Sort((a, b) => b.Average.CompareTo(a.Average));
+	        otherBlocks.Sort((a, b) => b.Average.CompareTo(a.Average));
+	        unknownBlocks.Sort((a, b) => b.Average.CompareTo(a.Average));
+            systemBlocks.Sort((a, b) => b.Average.CompareTo(a.Average));
+            characterBlocks.Sort((a, b) => b.Average.CompareTo(a.Average));
+            gridBlocks.Sort((a, b) => b.Average.CompareTo(a.Average));
+
+            if (systemBlocks.Any(b => b.Average.IsValid() && b.Average >= 0.001))
+	        {
+	            sb.AppendLine("Grid systems");
+
+                foreach(var block in systemBlocks)
+                {
+                    if (!block.Average.IsValid() || block.Average < 0.001)
+                        continue;
+
+                    sb.AppendLine($"{block.DisplayName}: {block.Average:N3}ms");
+                }
+
+                sb.AppendLine();
+            }
+
+            if (gridBlocks.Any(b => b.Average.IsValid() && b.Average >= 0.001))
+            {
+                sb.AppendLine("Grids:");
+
+                foreach (var block in gridBlocks)
+                {
+                    if (!block.Average.IsValid() || block.Average < 0.001)
+                        continue;
+
+                    sb.AppendLine($"{block.DisplayName.Substring(8)}: {block.Average:N3}ms");
+                }
+
+                sb.AppendLine();
+            }
+
+            if (blockBlocks.Any(b => b.Average.IsValid() && b.Average >= 0.001))
+	        {
+	            sb.AppendLine("Blocks:");
+
+	            foreach (var block in blockBlocks)
+	            {
+	                if (!block.Average.IsValid() || block.Average < 0.001)
+	                    continue;
+
+	                sb.AppendLine($"{block.DisplayName}: {block.Average:N3}ms");
+	            }
+
+	            sb.AppendLine();
+	        }
+
+	        if (characterBlocks.Any(b => b.Average.IsValid() && b.Average >= 0.001))
+	        {
+	            sb.AppendLine("Characters:");
+	            foreach (var block in characterBlocks)
+                {
+                    if (!block.Average.IsValid() || block.Average < 0.001)
+                        continue;
+
+                    sb.AppendLine($"{block.DisplayName}: {block.Average:N6}ms");
+	            }
+	            sb.AppendLine();
+	        }
+
+	        if (otherBlocks.Any( b => b.Average.IsValid() && b.Average >= 0.001))
+	        {
+	            sb.AppendLine("Other:");
+
+	            foreach (var block in otherBlocks)
+	            {
+	                if (!block.Average.IsValid() || block.Average < 0.001)
+	                    continue;
+
+	                sb.AppendLine($"{block.DisplayName}: {block.Average:N3}ms");
+	            }
+	            sb.AppendLine();
+	        }
+
+            if (graphicsBlocks.Any(b => b.Average.IsValid() && b.Average >= 0.001))
+	        {
+	            sb.AppendLine("Graphics:");
+
+	            foreach (var block in graphicsBlocks)
+	            {
+	                if (!block.Average.IsValid() || block.Average < 0.001)
+	                    continue;
+
+	                sb.AppendLine($"{block.DisplayName}: {block.Average:N3}ms");
+	            }
+	            sb.AppendLine();
+	        }
+
+            if (unknownBlocks.Any(b => b.Average.IsValid() && b.Average >= 0.001))
+	        {
+	            sb.AppendLine("UNKNOWN:");
+
+	            foreach (var block in unknownBlocks)
+	            {
+	                if (!block.Average.IsValid() || block.Average < 0.001)
+	                    continue;
+
+	                sb.AppendLine($"{block.DisplayName}: {block.Average:N3}ms");
+	            }
+	            sb.AppendLine();
+	        }
+
+	        TB_Profiler.Text = sb.ToString();
+	    }
+
+	    #endregion
+
+        #region "Control"
+
+        internal void BTN_ServerControl_Start_Click( object sender, EventArgs e )
 		{
 			m_chatViewRefreshTimer.Start( );
 			m_factionRefreshTimer.Start( );
@@ -227,10 +497,10 @@ namespace SEServerExtender
 			if ( m_server.Config != null )
 			{
 				//Enforce built-in auto-save being off
-				if ( m_server.Config.AutoSave )
+				if ( m_server.Config.AutoSaveInMinutes > 0 )
 				{
 					ApplicationLog.BaseLog.Warn( "SE built-in autosave was enabled in configuration. It has been disabled to prevent conflicts." );
-					m_server.Config.AutoSave = false;
+					m_server.Config.AutoSaveInMinutes = 0;
 				}
 				m_server.SaveServerConfig( );
 			}
@@ -249,18 +519,18 @@ namespace SEServerExtender
 
 			m_server.StopServer( );
 		}
-
-		private void CHK_Control_Debugging_CheckedChanged( object sender, EventArgs e )
+        
+        private void CHK_Control_Debugging_CheckedChanged( object sender, EventArgs e )
 		{
-			SandboxGameAssemblyWrapper.IsDebugging = CHK_Control_Debugging.CheckState == CheckState.Checked;
+			ExtenderOptions.IsDebugging = CHK_Control_Debugging.CheckState == CheckState.Checked;
 		}
 
 		private void CHK_Control_CommonDataPath_CheckedChanged( object sender, EventArgs e )
 		{
-			SandboxGameAssemblyWrapper.UseCommonProgramData = CHK_Control_CommonDataPath.CheckState == CheckState.Checked;
-			CMB_Control_CommonInstanceList.Enabled = SandboxGameAssemblyWrapper.UseCommonProgramData;
+			ExtenderOptions.UseCommonProgramData = CHK_Control_CommonDataPath.CheckState == CheckState.Checked;
+			CMB_Control_CommonInstanceList.Enabled = ExtenderOptions.UseCommonProgramData;
 
-			m_server.InstanceName = SandboxGameAssemblyWrapper.UseCommonProgramData ? CMB_Control_CommonInstanceList.Text : string.Empty;
+			m_server.InstanceName = ExtenderOptions.UseCommonProgramData ? CMB_Control_CommonInstanceList.Text : string.Empty;
 
 			m_server.LoadServerConfig( );
 
@@ -301,7 +571,7 @@ namespace SEServerExtender
 			if ( !CMB_Control_CommonInstanceList.Enabled || CMB_Control_CommonInstanceList.SelectedIndex == -1 ) return;
 
 			m_server.InstanceName = CMB_Control_CommonInstanceList.Text;
-			SandboxGameAssemblyWrapper.Instance.InitMyFileSystem( CMB_Control_CommonInstanceList.Text );
+			FileSystem.InitMyFileSystem( CMB_Control_CommonInstanceList.Text );
 
 			m_server.LoadServerConfig( );
 
@@ -315,7 +585,7 @@ namespace SEServerExtender
 			double interval;
 			if ( !double.TryParse( CMB_Control_AutosaveInterval.Text, out interval ) )
 				MessageBox.Show( this, "Invalid input for auto-save interval." );
-			
+
 			if ( interval < 1 )
 				interval = 2;
 
@@ -325,7 +595,7 @@ namespace SEServerExtender
 		private void UpdateControls( )
 		{
 			if ( m_server.Config == null )
-				SandboxGameAssemblyWrapper.UseCommonProgramData = true;
+				ExtenderOptions.UseCommonProgramData = true;
 
 			if ( m_server.InstanceName.Length != 0 )
 			{
@@ -340,7 +610,7 @@ namespace SEServerExtender
 				}
 			}
 
-			CHK_Control_Debugging.Checked = SandboxGameAssemblyWrapper.IsDebugging;
+			CHK_Control_Debugging.Checked = ExtenderOptions.IsDebugging;
 
 			if ( !CMB_Control_CommonInstanceList.ContainsFocus && m_server.InstanceName.Length > 0 )
 				CMB_Control_CommonInstanceList.SelectedText = m_server.InstanceName;
@@ -400,8 +670,7 @@ namespace SEServerExtender
 
 		#region "Entities"
 
-		private void UpdateNodeInventoryItemBranch<T>( TreeNode node, List<T> source )
-			where T : InventoryItemEntity
+		private void UpdateNodeInventoryItemBranch( TreeNode node, List<MyPhysicalInventoryItem> source )
 		{
 			try
 			{
@@ -413,20 +682,20 @@ namespace SEServerExtender
 				}
 
 				int index = 0;
-				foreach ( T item in source )
+				foreach ( var item in source )
 				{
 					TreeNode itemNode;
 					if ( entriesChanged )
 					{
-						itemNode = node.Nodes.Add( item.Name );
-						itemNode.Tag = item;
+						itemNode = node.Nodes.Add( $"{item.GetDefinitionId().SubtypeName} ({item.Amount.ToIntSafe()})" );
+						itemNode.Tag = new InventoryItemWrapper(item, node.Tag as MyInventory);
 					}
 					else
 					{
 						itemNode = node.Nodes[ index ];
-						itemNode.Text = item.Name;
-						itemNode.Tag = item;
-					}
+						itemNode.Text = $"{item.GetDefinitionId().SubtypeName} ({item.Amount.ToIntSafe()})";
+						itemNode.Tag = new InventoryItemWrapper(item, node.Tag as MyInventory);
+                    }
 
 					index++;
 				}
@@ -441,40 +710,44 @@ namespace SEServerExtender
 		{
 			m_entityTreeRefreshTimer.Enabled = false;
 
-			try
-			{
-				if ( !SandboxGameAssemblyWrapper.Instance.IsGameStarted )
-					return;
+		    try
+		    {
+		        if (!MySandboxGameWrapper.IsGameStarted)
+		            return;
 
-				if ( TAB_MainTabs.SelectedTab != TAB_Entities_Page )
-					return;
+		        if (TAB_MainTabs.SelectedTab != TAB_Entities_Page)
+		            return;
 
-				TRV_Entities.BeginUpdate( );
+		        TRV_Entities.BeginUpdate();
 
-				TreeNode sectorObjectsNode;
-				TreeNode sectorEventsNode;
+		        TreeNode sectorObjectsNode;
+		        //TreeNode sectorEventsNode;
 
-				if ( TRV_Entities.Nodes.Count < 2 )
-				{
-					sectorObjectsNode = TRV_Entities.Nodes.Add( "Sector Objects" );
-					sectorEventsNode = TRV_Entities.Nodes.Add( "Sector Events" );
+		        if (TRV_Entities.Nodes.Count < 1)
+		        {
+		            sectorObjectsNode = TRV_Entities.Nodes.Add("Sector Objects");
+		            //sectorEventsNode = TRV_Entities.Nodes.Add( "Sector Events" );
 
-					sectorObjectsNode.Name = sectorObjectsNode.Text;
-					sectorEventsNode.Name = sectorEventsNode.Text;
-				}
-				else
-				{
-					sectorObjectsNode = TRV_Entities.Nodes[ 0 ];
-					sectorEventsNode = TRV_Entities.Nodes[ 1 ];
-				}
+		            sectorObjectsNode.Name = sectorObjectsNode.Text;
+		            //sectorEventsNode.Name = sectorEventsNode.Text;
+		        }
+		        else
+		        {
+		            sectorObjectsNode = TRV_Entities.Nodes[0];
+		            //sectorEventsNode = TRV_Entities.Nodes[ 1 ];
+		        }
 
-				RenderSectorObjectChildNodes( sectorObjectsNode );
-				sectorObjectsNode.Text = string.Format( "{0} ({1})", sectorObjectsNode.Name, SectorObjectManager.Instance.Count );
-				sectorObjectsNode.Tag = SectorObjectManager.Instance;
+		        RenderSectorObjectChildNodes(sectorObjectsNode);
+		        sectorObjectsNode.Text = $"{sectorObjectsNode.Name} ({m_sectorEntities.Count})";
+		        sectorObjectsNode.Tag = SectorObjectManager.Instance;
 
 
-				TRV_Entities.EndUpdate( );
-			}
+		        TRV_Entities.EndUpdate();
+		    }
+		    catch (Exception ex)
+		    {
+		        ApplicationLog.BaseLog.Error(ex);
+		    }
 			finally
 			{
 				m_entityTreeRefreshTimer.Interval = 500;
@@ -517,26 +790,35 @@ namespace SEServerExtender
 				floatingObjectsNode = objectsNode.Nodes[ 3 ];
 				meteorsNode = objectsNode.Nodes[ 4 ];
 			}
-
-			m_sectorEntities = SectorObjectManager.Instance.GetTypedInternalData<BaseEntity>( );
-			foreach ( BaseEntity entry in m_sectorEntities )
+            
+		    SandboxGameAssemblyWrapper.Instance.GameAction(() => m_sectorEntities = MyEntities.GetEntities() );
+            MyEntity[] entitiesCopy = new MyEntity[m_sectorEntities.Count];
+            m_sectorEntities.CopyTo( entitiesCopy );
+			//m_sectorEntities = SectorObjectManager.Instance.GetTypedInternalData<BaseEntity>( );
+			//foreach ( BaseEntity entry in m_sectorEntities )
+            foreach(MyEntity entity in entitiesCopy)
 			{
-				CubeGridEntity cubeGridEntity = entry as CubeGridEntity;
-				if ( cubeGridEntity != null )
-					m_cubeGridEntities.Add( cubeGridEntity );
-				CharacterEntity characterEntity = entry as CharacterEntity;
-				if ( characterEntity != null )
-					m_characterEntities.Add( characterEntity );
-				VoxelMap voxelMap = entry as VoxelMap;
-				if ( voxelMap != null )
-					m_voxelMapEntities.Add( voxelMap );
-				FloatingObject floatingObject = entry as FloatingObject;
-				if ( floatingObject != null )
-					m_floatingObjectEntities.Add( floatingObject );
-				Meteor meteor = entry as Meteor;
-				if ( meteor != null )
-					m_meteorEntities.Add( meteor );
+			    if (entity is MyCubeGrid)
+			        m_cubeGridEntities.Add(entity as MyCubeGrid);
+                else if (entity is MyCharacter)
+                    m_characterEntities.Add(entity as MyCharacter);
+                else if(entity is MyVoxelBase)
+                    m_voxelMapEntities.Add(entity as MyVoxelBase);
+                else if (entity is MyFloatingObject || entity is MyInventoryBagEntity)
+                    m_floatingObjectEntities.Add(entity);
+                else if (entity is IMyMeteor)
+                    m_meteorEntities.Add(entity);
 			}
+
+		    foreach ( var player in MySession.Static.Players.GetOnlinePlayers() )
+		    {
+		        var character = player?.Character;
+		        if ( character == null )
+		            continue;
+
+		        if ( !m_characterEntities.Contains( character ) )
+		            m_characterEntities.Add( character );
+		    }
 
 			RenderCubeGridNodes( cubeGridsNode );
 			RenderCharacterNodes( charactersNode );
@@ -551,7 +833,7 @@ namespace SEServerExtender
 				return;
 
 			//Get cube grids
-			List<CubeGridEntity> list = m_cubeGridEntities;
+			List<MyCubeGrid> list = m_cubeGridEntities;
 			SortCubeGrids( list );
 
 			//Cleanup and update the existing nodes
@@ -567,10 +849,26 @@ namespace SEServerExtender
 						continue;
 					}
 
-					CubeGridEntity item = (CubeGridEntity)node.Tag;
-					bool foundMatch = false;
-					foreach ( CubeGridEntity listItem in list )
+                    CubeGridWrapper wrapper = node.Tag as CubeGridWrapper;
+				    if ( wrapper == null )
+				    {
+				        node.Remove();
+				        continue;
+				    }
+
+					MyCubeGrid item = wrapper.Grid;
+				    if ( item == null )
+				    {
+				        node.Remove();
+				        continue;
+				    }
+
+				    bool foundMatch = false;
+					foreach ( MyCubeGrid listItem in list )
 					{
+					    if ( listItem == null )
+					        continue;
+
 						if ( listItem.EntityId == item.EntityId )
 						{
 							foundMatch = true;
@@ -595,7 +893,7 @@ namespace SEServerExtender
 			}
 
 			//Add new nodes
-			foreach ( CubeGridEntity item in list )
+			foreach ( MyCubeGrid item in list )
 			{
 				try
 				{
@@ -606,7 +904,7 @@ namespace SEServerExtender
 
 					TreeNode newNode = rootNode.Nodes.Add( nodeKey, GenerateCubeNodeText( item ) );
 					newNode.Name = item.Name;
-					newNode.Tag = item;
+					newNode.Tag = new CubeGridWrapper(item);
 				}
 				catch ( Exception ex )
 				{
@@ -618,64 +916,114 @@ namespace SEServerExtender
 			rootNode.Text = string.Format( "{0} ({1})", rootNode.Name, rootNode.Nodes.Count );
 		}
 
-		private string GenerateCubeNodeText( CubeGridEntity item )
+		private string GenerateCubeNodeText( MyCubeGrid item )
 		{
-			string text = item.DisplayName;
-
+			string text = item.DisplayName??"Ship";
+		        
 			int sortBy = CB_Entity_Sort.SelectedIndex;
 			switch ( sortBy )
 			{
 				case 0:
-					text += string.Format( " | {0}", item.Name );
+					//text += $" | {item.Name}";
 					break;
 				case 1:
-					text += string.Format( " | ID: {0}", item.EntityId );
-					break;
+                    text += $" | {(string.IsNullOrEmpty(item.GetOwner()) ? "No Owner" : $"Owner: {item.GetOwner()}")}";
+                    break;
+                case 2:
+			        text += $" | Blocks: {item.BlocksCount}";
+			        break;
 				case 4:
-					text += string.Format( " | Mass: {0} kg", Math.Floor( item.Mass ) );
+			        text += $" | Mass: {((item.Physics == null || item.Physics.IsStatic) ? "[Station]" : Math.Floor(item.Physics.Mass) + "kg")}";
 					break;
+                case 5:
+			        text += $" | EntityID: {item.EntityId}";
+			        break;
 			}
 
-			text += string.Format( " | Dist: {0}m", Math.Round( ( (Vector3D)item.Position ).Length( ), 0 ) );
+			text += string.Format( " | Dist: {0}m", Math.Round( ( (Vector3D)item.PositionComp.GetPosition() ).Length( ), 0 ) );
 
 			return text;
 		}
 
-		public void SortCubeGrids( List<CubeGridEntity> list )
+		public void SortCubeGrids( List<MyCubeGrid> list )
 		{
 			int sortBy = CB_Entity_Sort.SelectedIndex;
 
-			if ( sortBy == 0 ) // Name
+			if ( sortBy == 0 ) // Display Name
 			{
-				list.Sort( delegate( CubeGridEntity x, CubeGridEntity y )
-						  {
-							  if ( x.Name == null && y.Name == null ) return 0;
-							  if ( x.Name == null ) return -1;
-							  if ( y.Name == null ) return 1;
-							  return x.Name.CompareTo( y.Name );
-						  } );
+				list.Sort( ( x, y ) => string.Compare( x.DisplayName, y.DisplayName, StringComparison.CurrentCultureIgnoreCase ) );
 			}
-			else if ( sortBy == 1 ) // Entity ID
+			else if ( sortBy == 1 ) // Owner Name
 			{
-				list.Sort( ( x, y ) => x.EntityId.CompareTo( y.EntityId ) );
+                list.Sort((x, y) =>
+               {
+                   string yOwn = y.GetOwner();
+                   string xOwn = x.GetOwner();
+                   if (string.IsNullOrEmpty(yOwn) && !string.IsNullOrEmpty(xOwn))
+                   {
+                       return -1;
+                   }
+                   else if (!string.IsNullOrEmpty(yOwn) && string.IsNullOrEmpty(xOwn))
+                   {
+                       return 1;
+                   }
+                   else
+                   {
+                       return string.Compare(xOwn, yOwn);
+                   }
+               });
+            }
+			else if ( sortBy == 2 ) // Block Count
+			{
+                list.Sort((x,y) => x.BlocksCount.CompareTo( y.BlocksCount ));
 			}
-			else if ( sortBy == 2 ) // Distance From Center
-			{
-				list.Sort( ( x, y ) =>
-					{
-						if ( x == null || x.IsDisposed || x.IsLoading )
-							return -1;
+			else if ( sortBy == 3 ) // Distance from center
+            {
+                list.Sort((x, y) =>
+                   {
+                       if (x == null || x.Closed)
+                           return -1;
 
-						if ( y == null || y.IsDisposed || y.IsLoading )
-							return 1;
+                       if (y == null || y.Closed)
+                           return 1;
 
-						return Vector3D.Distance( x.Position, Vector3D.Zero ).CompareTo( Vector3D.Distance( y.Position, Vector3D.Zero ) );
-					} );
-			}
-			else if ( sortBy == 3 ) // Display Name
-			{
-				list.Sort( ( x, y ) => x.DisplayName.CompareTo( y.DisplayName ) );
-			}
+                       return Vector3D.DistanceSquared(x.PositionComp.GetPosition(), Vector3D.Zero).CompareTo(Vector3D.DistanceSquared(y.PositionComp.GetPosition(), Vector3D.Zero));
+                   });
+            }
+            else if ( sortBy == 4 ) // Weight
+            {
+                list.Sort( ( x, y ) =>
+                {
+                    if ( x?.Physics == null && y?.Physics != null )
+                        return 1;
+                    else if ( x?.Physics != null && y?.Physics == null )
+                        return -1;
+                    else if ( x?.Physics == null && y?.Physics == null )
+                        return 0;
+                    else if (x?.Physics!=null && y?.Physics!=null)
+                    {
+                        if ( x.Physics.IsStatic && !y.Physics.IsStatic )
+                            return 1;
+                        else if ( !x.Physics.IsStatic && y.Physics.IsStatic )
+                            return -1;
+                        else if ( x.Physics.IsStatic && y.Physics.IsStatic )
+                            return 0;
+                        else if ( !x.Physics.IsStatic && !y.Physics.IsStatic )
+                        {
+                            //if ( Math.Floor( x.Physics.Mass ) > Math.Floor( y.Physics.Mass ) )
+                            //    return 1;
+                            //else
+                            //    return -1;
+                            return x.Physics.Mass.CompareTo(y.Physics.Mass);
+                        }
+                    }
+                    return 1;
+                });
+            }
+            else if (sortBy == 5 ) // Entity ID
+            {
+                list.Sort( ( x, y ) => x.EntityId.CompareTo( y.EntityId ));
+            }
 		}
 
 		private void RenderCharacterNodes( TreeNode rootNode )
@@ -684,7 +1032,7 @@ namespace SEServerExtender
 				return;
 
 			//Get entities from sector object manager
-			List<CharacterEntity> list = m_characterEntities;
+			List<MyCharacter> list = m_characterEntities;
 
 			//Cleanup and update the existing nodes
 			foreach ( TreeNode node in rootNode.Nodes )
@@ -694,15 +1042,15 @@ namespace SEServerExtender
 					if ( node == null )
 						continue;
 
-					if ( node.Tag != null && list.Contains( node.Tag ) )
+                    if (node.Tag != null && list.Contains( ((CharacterWrapper)node.Tag).Character) )
 					{
-						CharacterEntity item = (CharacterEntity)node.Tag;
+						MyCharacter item = ((CharacterWrapper)node.Tag).Character;
 
-						if ( !item.IsDisposed )
+						if ( !item.Closed )
 						{
-							Vector3D rawPosition = item.Position;
+							Vector3D rawPosition = item.PositionComp.GetPosition();
 							double distance = Math.Round( rawPosition.Length( ), 0 );
-							string newNodeText = string.Format( "{0} | Dist: {1}m", item.Name, distance );
+							string newNodeText = $"{item.DisplayName} | Dist: {distance}m";
 							node.Text = newNodeText;
 						}
 						list.Remove( item );
@@ -719,21 +1067,21 @@ namespace SEServerExtender
 			}
 
 			//Add new nodes
-			foreach ( CharacterEntity item in list )
+			foreach ( MyCharacter item in list )
 			{
 				try
 				{
 					if ( item == null )
 						continue;
 
-					Vector3D rawPosition = item.Position;
+					Vector3D rawPosition = item.PositionComp.GetPosition();
 					double distance = rawPosition.Length( );
 
 					string nodeKey = item.EntityId.ToString( );
 
-					TreeNode newNode = rootNode.Nodes.Add( nodeKey, string.Format( "{0} | Dist: {1}m", item.Name, distance ) );
+					TreeNode newNode = rootNode.Nodes.Add( nodeKey, $"{item.DisplayName} | Dist: {distance}m");
 					newNode.Name = item.Name;
-					newNode.Tag = item;
+					newNode.Tag = new CharacterWrapper(item);
 				}
 				catch ( Exception ex )
 				{
@@ -751,7 +1099,7 @@ namespace SEServerExtender
 				return;
 
 			//Get entities from sector object manager
-			List<VoxelMap> list = m_voxelMapEntities;
+			List<MyVoxelBase> list = m_voxelMapEntities;
 
 			//Cleanup and update the existing nodes
 			foreach ( TreeNode node in rootNode.Nodes )
@@ -760,16 +1108,16 @@ namespace SEServerExtender
 				{
 					if ( node == null )
 						continue;
-
-					if ( node.Tag != null && list.Contains( node.Tag ) )
+                    
+				    if ( node.Tag != null && list.Contains( node.Tag ) )
 					{
-						VoxelMap item = (VoxelMap)node.Tag;
+						MyVoxelBase item = (MyVoxelBase)node.Tag;
 
-						if ( !item.IsDisposed )
+						if ( !item.Closed )
 						{
-							Vector3D rawPosition = item.Position;
+							Vector3D rawPosition = item.PositionComp.GetPosition();
 							double distance = Math.Round( rawPosition.Length( ), 0 );
-							string newNodeText = string.Format( "{0} | Dist: {1}m", item.Name, distance );
+							string newNodeText = $"{item.StorageName} | Dist: {distance}m";
 							node.Text = newNodeText;
 						}
 						list.Remove( item );
@@ -786,20 +1134,19 @@ namespace SEServerExtender
 			}
 
 			//Add new nodes
-			foreach ( VoxelMap item in list )
+			foreach ( MyVoxelBase item in list )
 			{
 				try
 				{
 					if ( item == null )
 						continue;
 
-					Vector3D rawPosition = item.Position;
+					Vector3D rawPosition = item.PositionComp.GetPosition();
 					double distance = rawPosition.Length( );
 
-					Type sectorObjectType = item.GetType( );
-					string nodeKey = item.EntityId.ToString( );
+                    string nodeKey = item.EntityId.ToString( );
 
-					TreeNode newNode = rootNode.Nodes.Add( nodeKey, string.Format( "{0} | Dist: {1}m", item.Name, distance ) );
+					TreeNode newNode = rootNode.Nodes.Add( nodeKey, $"{item.StorageName} | Dist: {distance}m");
 					newNode.Name = item.Name;
 					newNode.Tag = item;
 				}
@@ -808,7 +1155,7 @@ namespace SEServerExtender
 					ApplicationLog.BaseLog.Error( ex );
 				}
 			}
-
+            
 			//Update node text
 			rootNode.Text = string.Format( "{0} ({1})", rootNode.Name, rootNode.Nodes.Count );
 		}
@@ -817,9 +1164,9 @@ namespace SEServerExtender
 		{
 			if ( rootNode == null )
 				return;
-
-			//Get entities from sector object manager
-			List<FloatingObject> list = m_floatingObjectEntities;
+            
+            //items in this list can be MyFloatingObject or MyInvenoryBagEntity
+			List<MyEntity> list = m_floatingObjectEntities;
 
 			//Cleanup and update the existing nodes
 			foreach ( TreeNode node in rootNode.Nodes )
@@ -829,20 +1176,39 @@ namespace SEServerExtender
 					if ( node == null )
 						continue;
 
-					if ( node.Tag != null && list.Contains( node.Tag ) )
-					{
-						FloatingObject item = (FloatingObject)node.Tag;
+				    var floatWrapper = node.Tag as FloatingObjectWrapper;
+				    var bagWrapper = node.Tag as BagInventoryWrapper;
 
-						if ( !item.IsDisposed && item.Item != null )
-						{
-							Vector3D rawPosition = item.Position;
-							double distance = Math.Round( rawPosition.Length( ), 0 );
-							string newNodeText = string.Format( "{0} | Amount: {1} | Dist: {2}m", item.Name, item.Item.Amount, distance );
-							node.Text = newNodeText;
-						}
-						list.Remove( item );
+					if ( floatWrapper != null && list.Contains( floatWrapper.Entity ) )
+					{
+						MyEntity item = floatWrapper.Entity;
+
+					    if ( item != null && !item.Closed )
+					    {
+					        Vector3D rawPosition = item.PositionComp.GetPosition();
+					        double distance = Math.Round( rawPosition.Length(), 0 );
+
+					        var myFloating = (MyFloatingObject)item;
+					        string name = MyDefinitionManager.Static.GetPhysicalItemDefinition( myFloating.Item.Content ).DisplayNameText;
+					        node.Text = $"{name} | Amount: {myFloating.Item.Amount} | Dist: {distance}m";
+					    }
+					    list.Remove( item );
 					}
-					else
+                    else if (bagWrapper != null && list.Contains(bagWrapper.Entity))
+                    {
+                        MyEntity item = bagWrapper.Entity;
+
+                        if (item != null && !item.Closed)
+                        {
+                            Vector3D rawPosition = item.PositionComp.GetPosition();
+                            double distance = Math.Round(rawPosition.Length(), 0);
+                            
+                            var myBag = (MyInventoryBagEntity)item;
+                            node.Text = $"{myBag.DisplayName} | Mass: {myBag.GetInventory().CurrentMass} | Dist: {distance}m";
+                        }
+                        list.Remove(item);
+                    }
+                    else
 					{
 						node.Remove( );
 					}
@@ -854,25 +1220,38 @@ namespace SEServerExtender
 			}
 
 			//Add new nodes
-			foreach ( FloatingObject item in list )
+			foreach ( MyEntity item in list )
 			{
 				try
 				{
 					if ( item == null )
 						continue;
-					if ( item.IsDisposed )
-						continue;
-					if ( item.Item == null )
+					if ( item.Closed )
 						continue;
 
-					Vector3D rawPosition = item.Position;
+					Vector3D rawPosition = item.PositionComp.GetPosition();
 					double distance = rawPosition.Length( );
 
 					string nodeKey = item.EntityId.ToString( );
 
-					TreeNode newNode = rootNode.Nodes.Add( nodeKey, string.Format( "{0} | Amount: {1} | Dist: {2}m", item.Name, item.Item.Amount, distance ) );
-					newNode.Name = item.Name;
-					newNode.Tag = item;
+					TreeNode newNode;
+				    if (item is MyFloatingObject)
+				    {
+                        var myFloating = (MyFloatingObject)item;
+                        string name = MyDefinitionManager.Static.GetPhysicalItemDefinition(myFloating.Item.Content).DisplayNameText;
+                        newNode = rootNode.Nodes.Add(nodeKey, $"{name} | Amount: {myFloating.Item.Amount} | Dist: {distance}m");
+				    
+				    newNode.Name = item.Name;
+					newNode.Tag = new FloatingObjectWrapper(myFloating);
+                    }
+				    else
+				    {
+				        var myBag = (MyInventoryBagEntity) item;
+				        newNode = rootNode.Nodes.Add(nodeKey, $"{myBag.DisplayName} | Mass: {myBag.GetInventory( ).CurrentMass} | Dist: {distance}m");
+
+                        newNode.Name = item.Name;
+                        newNode.Tag = new BagInventoryWrapper(myBag);
+                    }
 				}
 				catch ( Exception ex )
 				{
@@ -881,7 +1260,7 @@ namespace SEServerExtender
 			}
 
 			//Update node text
-			rootNode.Text = string.Format( "{0} ({1})", rootNode.Name, rootNode.Nodes.Count );
+			rootNode.Text = $"{rootNode.Name} ({rootNode.Nodes.Count})";
 
 			// Update a var for the Utilities Floating object cleaner.
 			m_floatingObjectsCount = rootNode.Nodes.Count;
@@ -893,7 +1272,7 @@ namespace SEServerExtender
 				return;
 
 			//Get entities from sector object manager
-			List<Meteor> list = m_meteorEntities;
+			List<MyEntity> list = m_meteorEntities;
 
 			//Cleanup and update the existing nodes
 			foreach ( TreeNode node in rootNode.Nodes )
@@ -905,13 +1284,13 @@ namespace SEServerExtender
 
 					if ( node.Tag != null && list.Contains( node.Tag ) )
 					{
-						Meteor item = (Meteor)node.Tag;
-
-						if ( !item.IsDisposed )
+						MyEntity item = (MyEntity)node.Tag ;
+                        
+						if ( !item.Closed )
 						{
-							Vector3D rawPosition = item.Position;
+							Vector3D rawPosition = item.PositionComp.GetPosition();
 							double distance = Math.Round( rawPosition.Length( ), 0 );
-							string newNodeText = string.Format( "{0} | Dist: {1}m", item.Name, distance );
+							string newNodeText = string.Format( "{0} | Dist: {1}m", item.DisplayName, distance );
 							node.Text = newNodeText;
 						}
 						list.Remove( item );
@@ -928,14 +1307,14 @@ namespace SEServerExtender
 			}
 
 			//Add new nodes
-			foreach ( Meteor item in list )
+			foreach ( MyEntity item in list )
 			{
 				try
 				{
 					if ( item == null )
 						continue;
 
-					Vector3D rawPosition = item.Position;
+					Vector3D rawPosition = item.PositionComp.GetPosition();
 					double distance = rawPosition.Length( );
 
 					string nodeKey = item.EntityId.ToString( );
@@ -952,182 +1331,138 @@ namespace SEServerExtender
 			//Update node text
 			rootNode.Text = string.Format( "{0} ({1})", rootNode.Name, rootNode.Nodes.Count );
 		}
-
-		private void RenderCubeGridChildNodes( CubeGridEntity cubeGrid, TreeNode blocksNode )
+        
+		private void RenderCubeGridChildNodes( MyCubeGrid cubeGrid, TreeNode blocksNode )
 		{
-			TreeNode structuralBlocksNode;
-			TreeNode containerBlocksNode;
-			TreeNode productionBlocksNode;
-			TreeNode energyBlocksNode;
-			TreeNode conveyorBlocksNode;
-			TreeNode utilityBlocksNode;
-			TreeNode weaponBlocksNode;
-			TreeNode toolBlocksNode;
-			TreeNode lightBlocksNode;
-			TreeNode miscBlocksNode;
+		    Dictionary<string, MyGuiBlockCategoryDefinition> categories = MyDefinitionManager.Static.GetCategories();
+            var results = new Dictionary<string, List<MySlimBlock>>();
 
-			if ( blocksNode.Nodes.Count < 9 )
-			{
-				structuralBlocksNode = blocksNode.Nodes.Add( "Structural" );
-				containerBlocksNode = blocksNode.Nodes.Add( "Containers" );
-				productionBlocksNode = blocksNode.Nodes.Add( "Refinement and Production" );
-				energyBlocksNode = blocksNode.Nodes.Add( "Energy" );
-				conveyorBlocksNode = blocksNode.Nodes.Add( "Conveyor" );
-				utilityBlocksNode = blocksNode.Nodes.Add( "Utility" );
-				weaponBlocksNode = blocksNode.Nodes.Add( "Weapons" );
-				toolBlocksNode = blocksNode.Nodes.Add( "Tools" );
-				lightBlocksNode = blocksNode.Nodes.Add( "Lights" );
-				miscBlocksNode = blocksNode.Nodes.Add( "Misc" );
+            //process the categories in parallel because there are 14 categories minimum
+		    Parallel.ForEach( categories, ( category ) =>
+		                                  {
+                                              var result =  ProcessBlockCategories(cubeGrid, category);
+		                                      lock(results)
+                                                  results.Add( category.Key, result );
+		                                  });
 
-				structuralBlocksNode.Name = structuralBlocksNode.Text;
-				containerBlocksNode.Name = containerBlocksNode.Text;
-				productionBlocksNode.Name = productionBlocksNode.Text;
-				energyBlocksNode.Name = energyBlocksNode.Text;
-				conveyorBlocksNode.Name = conveyorBlocksNode.Text;
-				utilityBlocksNode.Name = utilityBlocksNode.Text;
-				weaponBlocksNode.Name = weaponBlocksNode.Text;
-				toolBlocksNode.Name = toolBlocksNode.Text;
-				lightBlocksNode.Name = lightBlocksNode.Text;
-				miscBlocksNode.Name = miscBlocksNode.Text;
-			}
-			else
-			{
-				structuralBlocksNode = blocksNode.Nodes[ 0 ];
-				containerBlocksNode = blocksNode.Nodes[ 1 ];
-				productionBlocksNode = blocksNode.Nodes[ 2 ];
-				energyBlocksNode = blocksNode.Nodes[ 3 ];
-				conveyorBlocksNode = blocksNode.Nodes[ 4 ];
-				utilityBlocksNode = blocksNode.Nodes[ 5 ];
-				weaponBlocksNode = blocksNode.Nodes[ 6 ];
-				toolBlocksNode = blocksNode.Nodes[ 7 ];
-				lightBlocksNode = blocksNode.Nodes[ 8 ];
-				miscBlocksNode = blocksNode.Nodes[ 9 ];
+            foreach (var result in results)
+		    {
+                //don't create an empty category
+		        if ( result.Value.Count == 0 )
+		            continue;
 
-				structuralBlocksNode.Nodes.Clear( );
-				containerBlocksNode.Nodes.Clear( );
-				productionBlocksNode.Nodes.Clear( );
-				energyBlocksNode.Nodes.Clear( );
-				conveyorBlocksNode.Nodes.Clear( );
-				utilityBlocksNode.Nodes.Clear( );
-				weaponBlocksNode.Nodes.Clear( );
-				toolBlocksNode.Nodes.Clear( );
-				lightBlocksNode.Nodes.Clear( );
-				miscBlocksNode.Nodes.Clear( );
-			}
+		        //see if this category already exists, if not create it
+		        TreeNode categoryNode;
+		        var searchNodes = blocksNode.Nodes.Find(result.Key, false);
+		        if (searchNodes.Length == 0)
+		        {
+		            categoryNode = blocksNode.Nodes.Add(result.Key);
+		            categoryNode.Name = result.Key;
+		        }
+		        else
+		        {
+		            categoryNode = searchNodes[0];
+		        }
+                
+		        //add the blocks to the tree structure
+                //cargo containers are lumped in with conveyors, let's create a separate category for those
+		        if ( result.Key == "Conveyors" )
+		        {
+		            int cargoCount = 0;
+		            int conveyorCount = 0;
+                    //see if this category already exists, if not create it
+                    TreeNode cargoNode;
+                    var cargoSearchNodes = blocksNode.Nodes.Find("Cargo Containers", false);
+                    if (cargoSearchNodes.Length == 0)
+                    {
+                        cargoNode = blocksNode.Nodes.Add("Cargo Containers");
+                        cargoNode.Name = "Cargo Containers";
+                    }
+                    else
+                    {
+                        cargoNode = cargoSearchNodes[0];
+                    }
 
-			foreach ( CubeBlockEntity cubeBlock in cubeGrid.CubeBlocks )
-			{
-				TreeNode newNode = new TreeNode( cubeBlock.Name );
-				newNode.Name = newNode.Text;
-				newNode.Tag = cubeBlock;
+                    foreach (MySlimBlock block in result.Value)
+                    {
+                        TreeNode cubeNode;
+                        if ( block.FatBlock == null )
+                        {
+                            cubeNode = categoryNode.Nodes.Add( block.BlockDefinition.Id.SubtypeName );
+                            cubeNode.Name = cubeNode.Text;
+                            cubeNode.Tag = SlimBlockWrapper.GetWrapper( block );
+                        }
+                        else
+                        {
+                            if ( block.FatBlock.HasInventory )
+                            {
+                                cargoCount++;
+                                cubeNode = cargoNode.Nodes.Add( block.FatBlock.DisplayNameText );
+                            }
 
-				Type cubeBlockType = cubeBlock.GetType( );
+                            else
+                            {
+                                conveyorCount++;
+                                cubeNode = categoryNode.Nodes.Add( block.FatBlock.DisplayNameText );
+                            }
 
-				if ( cubeBlockType == typeof( CubeBlockEntity ) )
-				{
-					structuralBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is CargoContainerEntity )
-				{
-					containerBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is ReactorEntity )
-				{
-					energyBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is BatteryBlockEntity )
-				{
-					energyBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is BeaconEntity )
-				{
-					utilityBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is CockpitEntity )
-				{
-					utilityBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is GravityGeneratorEntity )
-				{
-					utilityBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is MedicalRoomEntity )
-				{
-					utilityBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is DoorEntity )
-				{
-					utilityBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is InteriorLightEntity )
-				{
-					lightBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is ReflectorLightEntity )
-				{
-					lightBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is RefineryEntity )
-				{
-					productionBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is AssemblerEntity )
-				{
-					productionBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is ConveyorBlockEntity )
-				{
-					conveyorBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is ConveyorTubeEntity )
-				{
-					conveyorBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is SolarPanelEntity )
-				{
-					energyBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is GatlingTurretEntity )
-				{
-					weaponBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is MissileTurretEntity )
-				{
-					weaponBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is ShipGrinderEntity )
-				{
-					toolBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is ShipWelderEntity )
-				{
-					toolBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is ShipDrillEntity )
-				{
-					toolBlocksNode.Nodes.Add( newNode );
-				}
-				else if ( cubeBlock is InteriorTurretEntity )
-				{
-					weaponBlocksNode.Nodes.Add( newNode );
-				}
-				else
-				{
-					miscBlocksNode.Nodes.Add( newNode );
-				}
-			}
+                            cubeNode.Name = cubeNode.Text;
+                            cubeNode.Tag = SlimBlockWrapper.GetWrapper( block );
+                        }
+                    }
+		            categoryNode.Text = $"{categoryNode.Name} ({conveyorCount})";
+		            if ( cargoCount > 0 )
+		                cargoNode.Text =$"{cargoNode.Text} ({cargoCount})";
+		        }
+                    else
+                {
+                    //update node text with the count of blocks in this category
+                    categoryNode.Text = $"{categoryNode.Name} ({result.Value.Count})";
+                    foreach ( MySlimBlock block in result.Value )
+		            {
+		                TreeNode cubeNode;
+		                if ( block.FatBlock == null )
+		                {
+		                    cubeNode = categoryNode.Nodes.Add( block.BlockDefinition.Id.SubtypeName );
+		                    cubeNode.Name = cubeNode.Text;
+		                    cubeNode.Tag = SlimBlockWrapper.GetWrapper( block );
+		                }
+		                else
+		                {
+		                    cubeNode = categoryNode.Nodes.Add( block.FatBlock.DisplayNameText );
+		                    cubeNode.Name = cubeNode.Text;
+		                    cubeNode.Tag = SlimBlockWrapper.GetWrapper(block);
+		                }
+		            }
+		        }
+		    }
 
-			structuralBlocksNode.Text = string.Format( "{0} ({1})", structuralBlocksNode.Name, structuralBlocksNode.Nodes.Count );
-			containerBlocksNode.Text = string.Format( "{0} ({1})", containerBlocksNode.Name, containerBlocksNode.Nodes.Count );
-			productionBlocksNode.Text = string.Format( "{0} ({1})", productionBlocksNode.Name, productionBlocksNode.Nodes.Count );
-			energyBlocksNode.Text = string.Format( "{0} ({1})", energyBlocksNode.Name, energyBlocksNode.Nodes.Count );
-			conveyorBlocksNode.Text = string.Format( "{0} ({1})", conveyorBlocksNode.Name, conveyorBlocksNode.Nodes.Count );
-			utilityBlocksNode.Text = string.Format( "{0} ({1})", utilityBlocksNode.Name, utilityBlocksNode.Nodes.Count );
-			weaponBlocksNode.Text = string.Format( "{0} ({1})", weaponBlocksNode.Name, weaponBlocksNode.Nodes.Count );
-			toolBlocksNode.Text = string.Format( "{0} ({1})", toolBlocksNode.Name, toolBlocksNode.Nodes.Count );
-			lightBlocksNode.Text = string.Format( "{0} ({1})", lightBlocksNode.Name, lightBlocksNode.Nodes.Count );
-			miscBlocksNode.Text = string.Format( "{0} ({1})", miscBlocksNode.Name, miscBlocksNode.Nodes.Count );
+		    results.Clear();
 		}
+
+	    private List<MySlimBlock> ProcessBlockCategories( MyCubeGrid grid, KeyValuePair<string,MyGuiBlockCategoryDefinition> definition )
+	    {
+            var blockResult = new List<MySlimBlock>();
+
+	        foreach ( MySlimBlock block in grid.CubeBlocks )
+	        {
+	            if ( definition.Value.HasItem( block.BlockDefinition.Id.ToString() )) 
+	                blockResult.Add( block );
+            }
+
+            blockResult.Sort((a, b) =>
+                             {
+                                 if (a?.FatBlock?.DisplayNameText == null)
+                                     return 1;
+                                 if (b?.FatBlock?.DisplayNameText == null)
+                                     return -1;
+                                 if (a.FatBlock != null && b.FatBlock != null)
+                                     return string.Compare(a.FatBlock.DisplayNameText, b.FatBlock.DisplayNameText, StringComparison.CurrentCultureIgnoreCase);
+                                 return string.Compare(a.BlockDefinition.Id.SubtypeName, b.BlockDefinition.Id.SubtypeName, StringComparison.CurrentCultureIgnoreCase);
+                             });
+
+	        return blockResult;
+	    }
 
 		private void TRV_Entities_NodeRefresh( object sender, TreeNodeMouseClickEventArgs e )
 		{
@@ -1171,108 +1506,37 @@ namespace SEServerExtender
 				}
 			}
 
-			if ( parentNode.Tag is CubeGridEntity )
-			{
-				BTN_Entities_New.Enabled = true;
-			}
-
 			if ( selectedNode.Tag == null )
 				return;
 
 			object linkedObject = selectedNode.Tag;
 			PG_Entities_Details.SelectedObject = linkedObject;
 
-			//Enable export for all objects that inherit from BaseObject
-			if ( linkedObject is BaseObject )
-			{
-				BTN_Entities_Export.Enabled = true;
-			}
 
-			BaseEntity baseEntity = linkedObject as BaseEntity;
-			if ( baseEntity != null )
-			{
-				//Enable delete for all objects that inherit from BaseEntity
-				BTN_Entities_Delete.Enabled = true;
+            var grid = (linkedObject as CubeGridWrapper)?.Grid;
+		    if (grid != null)
+		    {
+		        BTN_Entities_Export.Enabled = true;
+		        btnRepairEntity.Enabled = true;
+		        BTN_Entities_Delete.Enabled = true;
 
-				//If the object isn't InScene, let's just stop here.
-				if ( !baseEntity.InScene )
-				{
-					return;
-				}
-			}
+		        TRV_Entities.BeginUpdate();
 
+		        RenderCubeGridChildNodes(grid, e.Node);
 
-			//Enable delete and repair for all objects that inherit from CubeBlockEntity
-			CubeBlockEntity cubeBlockEntity = linkedObject as CubeBlockEntity;
-			if ( cubeBlockEntity != null )
-			{
-				BTN_Entities_Delete.Enabled = true;
-				btnRepairEntity.Enabled = true;
-			}
-
-			CubeGridEntity cubeGridEntity = linkedObject as CubeGridEntity;
-			if ( cubeGridEntity != null )
-			{
-				BTN_Entities_New.Enabled = true;
-				btnRepairEntity.Enabled = true;
-
-				TRV_Entities.BeginUpdate( );
-
-				RenderCubeGridChildNodes( cubeGridEntity, e.Node );
-
-				TRV_Entities.EndUpdate( );
-			}
-
-			VoxelMap map = linkedObject as VoxelMap;
+		        TRV_Entities.EndUpdate();
+		        return;
+		    }
+            
+		    var map = linkedObject as MyVoxelBase;
 			if ( map != null )
 			{
-				VoxelMap voxelMap = map;
+                BTN_Entities_Delete.Enabled = true;
+            }
 
-				List<MyVoxelMaterialDefinition> materialDefs = new List<MyVoxelMaterialDefinition>( MyDefinitionManager.Static.GetVoxelMaterialDefinitions( ) );
-
-				ThreadPool.QueueUserWorkItem( state =>
-											 {
-												 Dictionary<MyVoxelMaterialDefinition, float> totalMaterials = voxelMap.Materials;
-
-												 Invoke( new Action( ( ) =>
-																		{
-																			TRV_Entities.BeginUpdate( );
-																			if ( e.Node.Nodes.Count < materialDefs.Count )
-																			{
-																				e.Node.Nodes.Clear( );
-
-																				foreach ( MyVoxelMaterialDefinition material in materialDefs )
-																				{
-																					TreeNode newNode = e.Node.Nodes.Add( material.Id.SubtypeName );
-																					newNode.Name = newNode.Text;
-																					newNode.Tag = material;
-																				}
-																			}
-
-																			foreach ( TreeNode node in e.Node.Nodes )
-																			{
-																				Object tag = node.Tag;
-																				if ( !( tag is MyVoxelMaterialDefinition ) )
-																					continue;
-																				MyVoxelMaterialDefinition material = (MyVoxelMaterialDefinition)tag;
-																				float total;
-																				if ( totalMaterials.TryGetValue( material, out total ) )
-																				{
-																					node.Text = string.Format( "{0} ({1})", node.Name, total );
-																				}
-																			}
-
-																			TRV_Entities.EndUpdate( );
-																		} ) );
-											 } );
-
-			}
-
-			CharacterEntity characterEntity = linkedObject as CharacterEntity;
-			if ( characterEntity != null )
+			var character = (linkedObject as CharacterWrapper)?.Character;
+			if ( character != null )
 			{
-				CharacterEntity character = characterEntity;
-
 				if ( e.Node.Nodes.Count < 1 )
 				{
 					TRV_Entities.BeginUpdate( );
@@ -1280,53 +1544,35 @@ namespace SEServerExtender
 					e.Node.Nodes.Clear( );
 					TreeNode itemsNode = e.Node.Nodes.Add( "Items" );
 					itemsNode.Name = itemsNode.Text;
-					itemsNode.Tag = character.Inventory;
+					itemsNode.Tag = character.GetInventory();
 
 					TRV_Entities.EndUpdate( );
 				}
+			    return;
 			}
 
-			SmallGatlingGunEntity smallGatlingGunEntity = linkedObject as SmallGatlingGunEntity;
-			if ( smallGatlingGunEntity != null )
+            var block = linkedObject as SlimBlockWrapper;
+            if (block != null)
+            {
+                btnRepairEntity.Enabled = true;
+                BTN_Entities_Delete.Enabled = true;
+            }
+
+		    var floating = linkedObject as FloatingObjectWrapper;
+		    if ( floating != null )
+		    {
+		        BTN_Entities_Delete.Enabled = true;
+		    }
+
+		    var pack = linkedObject as BagInventoryWrapper;
+		    if ( pack != null )
+		    {
+		        BTN_Entities_Delete.Enabled = true;
+		    }
+
+		    var cockpit = (linkedObject as CubeBlockWrapper)?.Entity as MyCockpit;
+			if ( cockpit?.Pilot != null)
 			{
-				SmallGatlingGunEntity gun = smallGatlingGunEntity;
-
-				if ( e.Node.Nodes.Count < 1 )
-				{
-					TRV_Entities.BeginUpdate( );
-
-					e.Node.Nodes.Clear( );
-					TreeNode itemsNode = e.Node.Nodes.Add( "Ammo" );
-					itemsNode.Name = itemsNode.Text;
-					itemsNode.Tag = gun.Inventory;
-
-					TRV_Entities.EndUpdate( );
-				}
-			}
-
-			TurretBaseEntity turretBaseEntity = linkedObject as TurretBaseEntity;
-			if ( turretBaseEntity != null )
-			{
-				TurretBaseEntity gun = turretBaseEntity;
-
-				if ( e.Node.Nodes.Count < 1 )
-				{
-					TRV_Entities.BeginUpdate( );
-
-					e.Node.Nodes.Clear( );
-					TreeNode itemsNode = e.Node.Nodes.Add( "Ammo" );
-					itemsNode.Name = itemsNode.Text;
-					itemsNode.Tag = gun.Inventory;
-
-					TRV_Entities.EndUpdate( );
-				}
-			}
-
-			CockpitEntity cockpitEntity = linkedObject as CockpitEntity;
-			if ( cockpitEntity != null )
-			{
-				CockpitEntity cockpit = cockpitEntity;
-
 				if ( e.Node.Nodes.Count < 1 )
 				{
 					TRV_Entities.BeginUpdate( );
@@ -1334,7 +1580,7 @@ namespace SEServerExtender
 					e.Node.Nodes.Clear( );
 					TreeNode node = e.Node.Nodes.Add( "Pilot" );
 					node.Name = node.Text;
-					node.Tag = cockpit.PilotEntity;
+					node.Tag = cockpit.Pilot;
 
 					TRV_Entities.EndUpdate( );
 				}
@@ -1343,137 +1589,140 @@ namespace SEServerExtender
 					TRV_Entities.BeginUpdate( );
 
 					TreeNode node = e.Node.Nodes[ 0 ];
-					node.Tag = cockpit.PilotEntity;
+					node.Tag = cockpit.Pilot;
 
 					TRV_Entities.EndUpdate( );
 				}
+			    return;
 			}
-
-			CargoContainerEntity cargoContainerEntity = linkedObject as CargoContainerEntity;
-			if ( cargoContainerEntity != null )
+            
+			var inventory = linkedObject as MyInventory;
+			if ( inventory != null )
 			{
-				CargoContainerEntity container = cargoContainerEntity;
+                BTN_Entities_New.Enabled = true;
 
-				if ( e.Node.Nodes.Count < 1 )
-				{
-					TRV_Entities.BeginUpdate( );
+                UpdateNodeInventoryItemBranch( e.Node, inventory.GetItems() );
 
-					e.Node.Nodes.Clear( );
-					TreeNode itemsNode = e.Node.Nodes.Add( "Items" );
-					itemsNode.Name = itemsNode.Text;
-					itemsNode.Tag = container.Inventory;
-
-					TRV_Entities.EndUpdate( );
-				}
+			    return;
 			}
-
-			ReactorEntity reactorEntity = linkedObject as ReactorEntity;
-			if ( reactorEntity != null )
-			{
-				ReactorEntity reactor = reactorEntity;
-
-				if ( e.Node.Nodes.Count < 1 )
-				{
-					TRV_Entities.BeginUpdate( );
-
-					e.Node.Nodes.Clear( );
-					TreeNode itemsNode = e.Node.Nodes.Add( "Items" );
-					itemsNode.Name = itemsNode.Text;
-					itemsNode.Tag = reactor.Inventory;
-
-					TRV_Entities.EndUpdate( );
-				}
-			}
-
-			ShipToolBaseEntity shipToolBaseEntity = linkedObject as ShipToolBaseEntity;
-			if ( shipToolBaseEntity != null )
-			{
-				ShipToolBaseEntity shipTool = shipToolBaseEntity;
-
-				if ( e.Node.Nodes.Count < 1 )
-				{
-					TRV_Entities.BeginUpdate( );
-
-					e.Node.Nodes.Clear( );
-					TreeNode itemsNode = e.Node.Nodes.Add( "Items" );
-					itemsNode.Name = itemsNode.Text;
-					itemsNode.Tag = shipTool.Inventory;
-
-					TRV_Entities.EndUpdate( );
-				}
-			}
-
-			ShipDrillEntity shipDrillEntity = linkedObject as ShipDrillEntity;
-			if ( shipDrillEntity != null )
-			{
-				ShipDrillEntity shipDrill = shipDrillEntity;
-
-				if ( e.Node.Nodes.Count < 1 )
-				{
-					TRV_Entities.BeginUpdate( );
-
-					e.Node.Nodes.Clear( );
-					TreeNode itemsNode = e.Node.Nodes.Add( "Items" );
-					itemsNode.Name = itemsNode.Text;
-					itemsNode.Tag = shipDrill.Inventory;
-
-					TRV_Entities.EndUpdate( );
-				}
-			}
-
-			ProductionBlockEntity productionBlockEntity = linkedObject as ProductionBlockEntity;
-			if ( productionBlockEntity != null )
-			{
-				ProductionBlockEntity productionBlock = productionBlockEntity;
-
-				if ( e.Node.Nodes.Count < 2 )
-				{
-					TRV_Entities.BeginUpdate( );
-
-					e.Node.Nodes.Clear( );
-					TreeNode inputNode = e.Node.Nodes.Add( "Input" );
-					inputNode.Name = inputNode.Text;
-					inputNode.Tag = productionBlock.InputInventory;
-					TreeNode outputNode = e.Node.Nodes.Add( "Output" );
-					outputNode.Name = outputNode.Text;
-					outputNode.Tag = productionBlock.OutputInventory;
-
-					TRV_Entities.EndUpdate( );
-				}
-			}
-
-			InventoryEntity inventoryEntity = linkedObject as InventoryEntity;
-			if ( inventoryEntity != null )
-			{
-				BTN_Entities_New.Enabled = true;
-
-				InventoryEntity inventory = inventoryEntity;
-
-				UpdateNodeInventoryItemBranch( e.Node, inventory.Items );
-			}
-
-			if ( linkedObject is InventoryItemEntity )
+            
+			if ( linkedObject is InventoryItemWrapper )
 			{
 				BTN_Entities_New.Enabled = true;
 				BTN_Entities_Delete.Enabled = true;
+
+			    return;
 			}
+
+            var entity = (linkedObject as CubeBlockWrapper)?.Entity;
+            if (entity != null && entity.HasInventory)
+            {
+                BTN_Entities_Delete.Enabled = true;
+                if (entity.InventoryCount == 1)
+                {
+                    if (e.Node.Nodes.Count < 1)
+                    {
+                        TRV_Entities.BeginUpdate();
+
+                        e.Node.Nodes.Clear();
+                        TreeNode itemsNode = e.Node.Nodes.Add("Inventory");
+                        itemsNode.Name = itemsNode.Text;
+                        itemsNode.Tag = entity.GetInventory();
+
+                        TRV_Entities.EndUpdate();
+                    }
+                }
+                if (entity.InventoryCount == 2)     //production blocks
+                {
+                    if (e.Node.Nodes.Count < 2)
+                    {
+                        TRV_Entities.BeginUpdate();
+
+                        e.Node.Nodes.Clear();
+                        TreeNode inputNode = e.Node.Nodes.Add("Input");
+                        inputNode.Name = inputNode.Text;
+                        inputNode.Tag = entity.GetInventory(0);
+                        TreeNode outputNode = e.Node.Nodes.Add("Output");
+                        outputNode.Name = outputNode.Text;
+                        outputNode.Tag = entity.GetInventory(1);
+
+                        TRV_Entities.EndUpdate();
+                    }
+                }
+            }
 		}
 
-		private void BTN_Entities_Delete_Click( object sender, EventArgs e )
+        private void BTN_Entities_Delete_Click( object sender, EventArgs e )
 		{
 			try
 			{
-				Object linkedObject = TRV_Entities.SelectedNode.Tag;
-				if ( !( linkedObject is BaseObject ) )
-				{
-					ApplicationLog.BaseLog.Info( "Object cannot be deleted." );
-					return;
-				}
+				object linkedObject = TRV_Entities.SelectedNode.Tag;
+                
+                //if object is an inventory item, remove it from the inventory in the parent node
+			    var item = (linkedObject as InventoryItemWrapper)?.Item;
+			    if (item != null)
+			    {
+			        var inventory = TRV_Entities.SelectedNode.Parent.Tag as MyInventory;
+                    //we have to check value because MyPhysicalInventoryItem is a struct for some reason
+			        SandboxGameAssemblyWrapper.Instance.GameAction(() => inventory?.Remove(item.Value, item.Value.Amount));
+			    }
+                
+                //raze blocks on grid
+                var block = (linkedObject as SlimBlockWrapper)?.SlimBlock;
+			    if (block != null)
+			    {
+			        SandboxGameAssemblyWrapper.Instance.GameAction( () => block.CubeGrid.RazeBlock( block.Position ));
+			        //return;
+			    }
 
-				BaseObject baseObject = (BaseObject)linkedObject;
-				baseObject.Dispose( );
+			    var floating = ( linkedObject as FloatingObjectWrapper )?.Entity;
+			    if ( floating != null )
+			    {
+                    if (floating.Closed)
+                    {
+                        ApplicationLog.BaseLog.Info("Object cannot be deleted.");
+                        return;
+                    }
 
-				TreeNode parentNode = TRV_Entities.SelectedNode.Parent;
+			        SandboxGameAssemblyWrapper.Instance.GameAction( () => floating.Close() );
+			    }
+
+                var bag = (linkedObject as BagInventoryWrapper)?.Entity;
+                if (bag != null)
+                {
+                    if (bag.Closed)
+                    {
+                        ApplicationLog.BaseLog.Info("Object cannot be deleted.");
+                        return;
+                    }
+
+                    SandboxGameAssemblyWrapper.Instance.GameAction( () => bag.Close() );
+                }
+
+			    var grid = (linkedObject as CubeGridWrapper)?.Grid;
+			    if ( grid != null )
+			    {
+			        if ( grid.Closed )
+			        {
+			            ApplicationLog.BaseLog.Info( "Object cannot be deleted." );
+			            return;
+			        }
+			        SandboxGameAssemblyWrapper.Instance.GameAction( () => grid.Close() );
+			    }
+
+                //entities can just be Closed
+                var entity = linkedObject as MyEntity;
+			    if (entity != null)
+			    {
+			        if (entity.Closed)
+			        {
+			            ApplicationLog.BaseLog.Info("Object cannot be deleted.");
+			            return;
+			        }
+			        SandboxGameAssemblyWrapper.Instance.GameAction( () => entity.Close() );
+			    }
+
+			    TreeNode parentNode = TRV_Entities.SelectedNode.Parent;
 				TRV_Entities.SelectedNode.Tag = null;
 				TreeNode newSelectedNode = ( TRV_Entities.SelectedNode.NextVisibleNode ?? TRV_Entities.SelectedNode.PrevVisibleNode ) ?? parentNode.FirstNode;
 
@@ -1497,14 +1746,34 @@ namespace SEServerExtender
 			{
 				TreeNode selectedNode = TRV_Entities.SelectedNode;
 
-				if ( selectedNode == null )
-					return;
-
-				TreeNode parentNode = selectedNode.Parent;
+			    TreeNode parentNode = selectedNode?.Parent;
 
 				if ( parentNode == null )
 					return;
 
+			    object linkedObject = TRV_Entities.SelectedNode.Tag;
+
+			    var inventory = linkedObject as MyInventory;
+			    if ( inventory!=null)
+			    {
+                    InventoryItemDialog newItemDialog = new InventoryItemDialog { InventoryContainer = inventory };
+                    newItemDialog.ShowDialog(this);
+
+                    TreeViewEventArgs newEvent = new TreeViewEventArgs(selectedNode);
+                    TRV_Entities_AfterSelect(sender, newEvent);
+
+                    return;
+                }
+
+			    if (linkedObject is MyPhysicalInventoryItem)
+			    {
+                    InventoryItemDialog newItemDialog = new InventoryItemDialog { InventoryContainer = (MyInventory)parentNode.Tag };
+                    newItemDialog.ShowDialog(this);
+
+                    TreeViewEventArgs newEvent = new TreeViewEventArgs(selectedNode);
+                    TRV_Entities_AfterSelect(sender, newEvent);
+                }
+                
 				SectorObjectManager sectorObjectManager = parentNode.Tag as SectorObjectManager;
 				if ( sectorObjectManager != null )
 				{
@@ -1515,6 +1784,7 @@ namespace SEServerExtender
 					}
 				}
 
+                /*
 				CubeGridEntity cubeGridEntity = parentNode.Tag as CubeGridEntity;
 				if ( cubeGridEntity != null )
 				{
@@ -1522,44 +1792,7 @@ namespace SEServerExtender
 					dialog.ShowDialog( this );
 					return;
 				}
-
-				if ( selectedNode.Tag == null )
-					return;
-
-				if ( !( selectedNode.Tag is BaseObject ) )
-					return;
-
-				BaseObject linkedObject = (BaseObject)selectedNode.Tag;
-
-				InventoryEntity inventoryEntity = linkedObject as InventoryEntity;
-				if ( inventoryEntity != null )
-				{
-					InventoryItemDialog newItemDialog = new InventoryItemDialog { InventoryContainer = inventoryEntity };
-					newItemDialog.ShowDialog( this );
-
-					TreeViewEventArgs newEvent = new TreeViewEventArgs( selectedNode );
-					TRV_Entities_AfterSelect( sender, newEvent );
-
-					return;
-				}
-
-				InventoryItemEntity inventoryItemEntity = linkedObject as InventoryItemEntity;
-				if ( inventoryItemEntity != null )
-				{
-					InventoryItemDialog newItemDialog = new InventoryItemDialog { InventoryContainer = inventoryItemEntity.Container };
-					newItemDialog.ShowDialog( this );
-
-					TreeViewEventArgs newEvent = new TreeViewEventArgs( parentNode );
-					TRV_Entities_AfterSelect( sender, newEvent );
-
-					return;
-				}
-
-				if ( linkedObject is CubeGridEntity )
-				{
-					CreateCubeGridImportDialog( );
-					return;
-				}
+                */
 			}
 			catch ( Exception ex )
 			{
@@ -1571,16 +1804,10 @@ namespace SEServerExtender
 		{
 			try
 			{
-				if ( TRV_Entities.SelectedNode == null )
-					return;
-				Object linkedObject = TRV_Entities.SelectedNode.Tag;
-				if ( linkedObject == null )
-					return;
-				if ( !( linkedObject is BaseObject ) )
-					return;
-
-				BaseObject objectToExport = (BaseObject)linkedObject;
-
+                MyCubeGrid exportGrid = (TRV_Entities.SelectedNode?.Tag as CubeGridWrapper)?.Grid;
+			    if ( exportGrid == null )
+			        return;
+                
 				SaveFileDialog saveFileDialog = new SaveFileDialog { Filter = "sbc file (*.sbc)|*.sbc|All files (*.*)|*.*", InitialDirectory = GameInstallationInfo.GamePath };
 
 				if ( saveFileDialog.ShowDialog( ) == DialogResult.OK )
@@ -1588,11 +1815,11 @@ namespace SEServerExtender
 					FileInfo fileInfo = new FileInfo( saveFileDialog.FileName );
 					try
 					{
-						objectToExport.Export( fileInfo );
+						MyObjectBuilderSerializer.SerializeXML( fileInfo.FullName, false, exportGrid.GetObjectBuilder( ) );
 					}
 					catch ( Exception ex )
 					{
-						MessageBox.Show( this, ex.Message );
+						ApplicationLog.BaseLog.Error( ex );
 					}
 				}
 			}
@@ -1628,9 +1855,15 @@ namespace SEServerExtender
 					{
 						try
 						{
-							CubeGridEntity cubeGrid = new CubeGridEntity( fileInfo );
+						    MyObjectBuilder_CubeGrid builder;
+						    if ( !MyObjectBuilderSerializer.DeserializeXML( fileInfo.FullName, out builder ) )
+						        return;
 
-							SectorObjectManager.Instance.AddEntity( cubeGrid );
+						    SandboxGameAssemblyWrapper.Instance.GameAction( () =>
+						    {
+						        MyEntities.RemapObjectBuilder( builder );
+						        MyEntities.CreateFromObjectBuilderAndAdd( builder );
+						    } );
 						}
 						catch ( Exception ex )
 						{
@@ -1738,8 +1971,8 @@ namespace SEServerExtender
 			string message = TXT_Chat_Message.Text;
 			if ( !string.IsNullOrEmpty( message ) )
 			{
-				ChatManager.Instance.SendPublicChatMessage( message );
-				TXT_Chat_Message.Text = string.Empty;
+                ChatManager.Instance.SendPublicChatMessage(message);
+                TXT_Chat_Message.Text = string.Empty;
 			}
 		}
 
@@ -1761,7 +1994,8 @@ namespace SEServerExtender
 			if ( LST_Chat_ConnectedPlayers.SelectedItem != null )
 			{
 				ChatUserItem item = (ChatUserItem)LST_Chat_ConnectedPlayers.SelectedItem;
-				ChatManager.Instance.SendPublicChatMessage( string.Format( "/kick {0}", item.SteamId ) );
+				//ChatManager.Instance.SendPublicChatMessage( string.Format( "/kick {0}", item.SteamId ) );
+                PlayerManager.Instance.KickPlayer( item.SteamId );
 			}
 		}
 
@@ -1770,7 +2004,8 @@ namespace SEServerExtender
 			if ( LST_Chat_ConnectedPlayers.SelectedItem != null )
 			{
 				ChatUserItem item = (ChatUserItem)LST_Chat_ConnectedPlayers.SelectedItem;
-				ChatManager.Instance.SendPublicChatMessage( string.Format( "/ban {0}", item.SteamId ) );
+                //ChatManager.Instance.SendPublicChatMessage( string.Format( "/ban {0}", item.SteamId ) );
+                PlayerManager.Instance.BanPlayer(item.SteamId );
 			}
 		}
 		#endregion
@@ -1781,11 +2016,11 @@ namespace SEServerExtender
 		{
 			try
 			{
-				if ( SandboxGameAssemblyWrapper.Instance.IsGameStarted )
+				if ( MySandboxGameWrapper.IsGameStarted )
 				{
 					TRV_Factions.BeginUpdate( );
 
-					List<Faction> list = FactionsManager.Instance.Factions;
+					List<MyFaction> list = MySession.Static.Factions.Select( f => f.Value ).ToList( );
 
 					//Cleanup and update the existing nodes
 					foreach ( TreeNode node in TRV_Factions.Nodes )
@@ -1800,45 +2035,50 @@ namespace SEServerExtender
 								continue;
 							}
 
-							Faction item = (Faction)node.Tag;
+							FactionWrapper item = (FactionWrapper)node.Tag;
 							bool foundMatch = false;
-							foreach ( Faction faction in list )
+							foreach ( MyFaction faction in list )
 							{
-								if ( faction.Id == item.Id )
-								{
-									foundMatch = true;
+							    if (faction.FactionId != item.Faction.FactionId)
+							        continue;
 
-									string newNodeText = string.Format( "{0} ({1})", item.Name, item.Members.Count );
-									node.Text = newNodeText;
+							    var fac = item.Faction;
 
-									TreeNode membersNode = node.Nodes[ 0 ];
-									TreeNode joinRequestsNode = node.Nodes[ 1 ];
+							    foundMatch = true;
 
-									if ( membersNode.Nodes.Count != item.Members.Count )
-									{
-										membersNode.Nodes.Clear( );
-										foreach ( FactionMember member in item.Members )
-										{
-											TreeNode memberNode = membersNode.Nodes.Add( member.PlayerId.ToString( ), member.PlayerId.ToString( ) );
-											memberNode.Name = member.PlayerId.ToString( );
-											memberNode.Tag = member;
-										}
-									}
-									if ( joinRequestsNode.Nodes.Count != item.JoinRequests.Count )
-									{
-										joinRequestsNode.Nodes.Clear( );
-										foreach ( FactionMember member in item.JoinRequests )
-										{
-											TreeNode joinRequestNode = joinRequestsNode.Nodes.Add( member.PlayerId.ToString( ), member.PlayerId.ToString( ) );
-											joinRequestNode.Name = member.PlayerId.ToString( );
-											joinRequestNode.Tag = member;
-										}
-									}
+							    string newNodeText = $"{item.Tag}: {item.Name} ({fac.Members.Count()} [{fac.JoinRequests.Count()}])";
 
-									list.Remove( faction );
+                                node.Text = newNodeText;
 
-									break;
-								}
+							    TreeNode membersNode = node.Nodes[ 0 ];
+							    TreeNode joinRequestsNode = node.Nodes[ 1 ];
+
+							    if ( membersNode.Nodes.Count != fac.Members.Count() )
+							    {
+							        membersNode.Nodes.Clear( );
+							        foreach ( MyFactionMember member in fac.Members.Select( m=>m.Value ) )
+							        {
+                                        var wrapper = new FactionMemberWrapper(member, item);
+							            TreeNode memberNode = membersNode.Nodes.Add(wrapper.Name, wrapper.Name);
+							            memberNode.Name = wrapper.Name;
+							            memberNode.Tag = wrapper;
+							        }
+							    }
+							    if ( joinRequestsNode.Nodes.Count != fac.JoinRequests.Count() )
+							    {
+							        joinRequestsNode.Nodes.Clear( );
+							        foreach ( MyFactionMember member in fac.JoinRequests.Select( j=>j.Value ) )
+							        {
+							            var wrapper = new FactionMemberWrapper(member, item);
+                                        TreeNode joinRequestNode = joinRequestsNode.Nodes.Add(wrapper.Name, wrapper.Name);
+							            joinRequestNode.Name = wrapper.Name;
+							            joinRequestNode.Tag = wrapper;
+							        }
+							    }
+
+							    list.Remove( fac );
+
+							    break;
 							}
 
 							if ( !foundMatch )
@@ -1854,34 +2094,39 @@ namespace SEServerExtender
 					}
 
 					//Add new nodes
-					foreach ( Faction item in list )
+					foreach ( MyFaction item in list )
 					{
 						try
 						{
 							if ( item == null )
 								continue;
 
-							string nodeKey = item.Id.ToString( );
+                            var fac = new FactionWrapper(item);
 
-							TreeNode newNode = TRV_Factions.Nodes.Add( nodeKey, string.Format( "{0} ({1})", item.Name, item.Members.Count ) );
-							newNode.Name = item.Name;
-							newNode.Tag = item;
+                            string nodeKey = item.FactionId.ToString( );
+
+							TreeNode newNode = TRV_Factions.Nodes.Add( nodeKey, $"{item.Tag}: {item.Name} ({item.Members.Count()} [{item.JoinRequests.Count()}])");
+
+                            newNode.Name = item.Name;
+						    newNode.Tag = fac;
 
 							TreeNode membersNode = newNode.Nodes.Add( "Members" );
 							TreeNode joinRequestsNode = newNode.Nodes.Add( "Join Requests" );
 
-							foreach ( FactionMember member in item.Members )
-							{
-								TreeNode memberNode = membersNode.Nodes.Add( member.PlayerId.ToString( ), member.PlayerId.ToString( ) );
-								memberNode.Name = member.PlayerId.ToString( );
-								memberNode.Tag = member;
-							}
-							foreach ( FactionMember member in item.JoinRequests )
-							{
-								TreeNode memberNode = membersNode.Nodes.Add( member.PlayerId.ToString( ), member.PlayerId.ToString( ) );
-								memberNode.Name = member.PlayerId.ToString( );
-								memberNode.Tag = member;
-							}
+							foreach ( MyFactionMember member in item.Members.Select( m => m.Value ) )
+                            {
+                                var wrapper = new FactionMemberWrapper(member, fac);
+                                TreeNode memberNode = membersNode.Nodes.Add(wrapper.Name, wrapper.Name);
+                                memberNode.Name = wrapper.Name;
+                                memberNode.Tag = wrapper;
+                            }
+							foreach ( MyFactionMember member in item.JoinRequests.Select( j => j.Value ) )
+                            {
+                                var wrapper = new FactionMemberWrapper(member, fac);
+                                TreeNode joinRequestNode = joinRequestsNode.Nodes.Add(wrapper.Name, wrapper.Name);
+                                joinRequestNode.Name = wrapper.Name;
+                                joinRequestNode.Tag = wrapper;
+                            }
 						}
 						catch ( Exception ex )
 						{
@@ -1900,52 +2145,115 @@ namespace SEServerExtender
 
 		private void TRV_Factions_AfterSelect( object sender, TreeViewEventArgs e )
 		{
-			BTN_Factions_Delete.Enabled = false;
+            BTN_Factions_Delete.Enabled = false;
+            BTN_Factions_Demote.Enabled = false;
+            BTN_Factions_Promote.Enabled = false;
 
-			if ( e.Node == null )
-				return;
-			if ( e.Node.Tag == null )
+		    if ( e.Node?.Tag == null )
 				return;
 
 			object linkedObject = e.Node.Tag;
 
-			BTN_Factions_Delete.Enabled = true;
+		    if (linkedObject is FactionWrapper)
+		    {
+		        BTN_Factions_Delete.Text = "Delete";
+		        BTN_Factions_Delete.Enabled = true;
+		    }
+		    else
+		    {
+		        BTN_Factions_Delete.Text = "Kick";
 
-			PG_Factions.SelectedObject = linkedObject;
-
-			//DEBUG
-			if ( e.Node.Text.Equals( "Join Requests" ) )
-				BTN_Factions_Delete.Enabled = false;
+                if (e.Node.Parent.Text == "Join Requests")
+		        {
+		            BTN_Factions_Demote.Text = "Reject";
+		            BTN_Factions_Promote.Text = "Accept";
+		            BTN_Factions_Demote.Enabled = true;
+		            BTN_Factions_Promote.Enabled = true;
+		        }
+		        else
+		        {
+		            BTN_Factions_Demote.Text = "Demote";
+		            BTN_Factions_Promote.Text = "Promote";
+		            BTN_Factions_Demote.Enabled = true;
+		            BTN_Factions_Promote.Enabled = true;
+		            BTN_Factions_Delete.Enabled = true;
+		        }
+		    }
+		    PG_Factions.SelectedObject = linkedObject;
 		}
 
 		private void BTN_Factions_Delete_Click( object sender, EventArgs e )
 		{
 			TreeNode node = TRV_Factions.SelectedNode;
-			if ( node == null )
-				return;
-			if ( node.Tag == null )
+
+		    if ( node?.Tag == null )
 				return;
 
 			object linkedObject = node.Tag;
 
-			Faction faction = linkedObject as Faction;
+			MyFaction faction = (linkedObject as FactionWrapper)?.Faction;
 			if ( faction != null )
 			{
-				FactionsManager.Instance.RemoveFaction( faction.Id );
+				MyFactionCollection.RemoveFaction( faction.FactionId );
 			}
-
-			FactionMember factionMember = linkedObject as FactionMember;
-			if ( factionMember != null )
+		    var member = linkedObject as FactionMemberWrapper;
+		    if ( member != null )
 			{
-				factionMember.Parent.RemoveMember( factionMember.PlayerId );
+                ((FactionWrapper)node.Parent.Parent.Tag).Kick( member.PlayerId );
 			}
-		}
+            
+            TreeNode parentNode = TRV_Factions.SelectedNode.Parent;
+            TRV_Factions.SelectedNode.Tag = null;
+            TreeNode newSelectedNode = (TRV_Factions.SelectedNode.NextVisibleNode ?? TRV_Factions.SelectedNode.PrevVisibleNode) ?? parentNode.FirstNode;
 
-		#endregion
+            TRV_Factions.SelectedNode.Remove();
+            if (newSelectedNode != null)
+            {
+                TRV_Factions.SelectedNode = newSelectedNode;
+            }
+        }
 
-		#region "Plugins"
+        private void BTN_Factions_Promote_Click(object sender, EventArgs e)
+        {
+            TreeNode node = TRV_Factions.SelectedNode;
+            
+            var member = node?.Tag as FactionMemberWrapper;
+            if (member == null)
+                return;
 
-		private void PluginManagerRefresh( object sender, EventArgs e )
+            var faction = node.Parent?.Parent?.Tag as FactionWrapper;
+            if (faction == null)
+                return;
+
+            if (node.Parent.Text == "Join Requests") //accept the request
+                faction.Accept(member.PlayerId);
+            else //promotion
+                faction.Promote(member.PlayerId);
+        }
+
+        private void BTN_Factions_Demote_Click(object sender, EventArgs e)
+        {
+            TreeNode node = TRV_Factions.SelectedNode;
+
+            var member = node?.Tag as FactionMemberWrapper;
+            if (member == null)
+                return;
+
+            var faction = node.Parent?.Parent?.Tag as FactionWrapper;
+            if (faction == null)
+                return;
+
+            if (node.Parent.Text == "Join Requests") //reject the request
+                faction.Deny(member.PlayerId);
+            else //demotion
+                faction.Demote(member.PlayerId);
+        }
+
+        #endregion
+
+        #region "Plugins"
+
+        private void PluginManagerRefresh( object sender, EventArgs e )
 		{
 			if ( PluginManager.Instance.Initialized )
 			{
@@ -1961,7 +2269,20 @@ namespace SEServerExtender
 				foreach ( Guid key in PluginManager.Instance.Plugins.Keys )
 				{
 					IPlugin plugin = PluginManager.Instance.Plugins[ key ];
-					LST_Plugins.Items.Add( string.Format( "{0} - {1}", plugin.Name, plugin.Version.ToString( 4 ) ) );
+				    if ( plugin.Name == "Dedicated Server Essentials" )
+				    {
+				        FieldInfo memberInfo = plugin.GetType().GetField( "StableBuild", BindingFlags.Static | BindingFlags.Public );
+				        if (memberInfo != null)
+				        {
+				            bool pluginStable = (bool)memberInfo.GetValue(null);
+				            if (PluginManager.IsStable != pluginStable)
+				            {
+				                continue;
+				            }
+				        }
+				    }
+
+				    LST_Plugins.Items.Add( string.Format( "{0} - {1}", plugin.Name, plugin.Version.ToString( 4 ) ) );
 				}
 				LST_Plugins.SelectedIndex = selectedIndex;
 				LST_Plugins.EndUpdate( );
@@ -2168,7 +2489,7 @@ namespace SEServerExtender
 		}
 
 		/// <summary>
-		/// Repairs the selected <see cref="CubeBlockEntity"/> or <see cref="CubeGridEntity"/>
+		/// Repairs the selected <see cref="MyCubeBlock"/> or <see cref="MyCubeGrid"/>
 		/// </summary>
 		/// <param name="sender"></param>
 		/// <param name="e"></param>
@@ -2207,22 +2528,22 @@ namespace SEServerExtender
 			object linkedObject = selectedNode.Tag;
 			PG_Entities_Details.SelectedObject = linkedObject;
 
-			CubeGridEntity cubeGridEntity = linkedObject as CubeGridEntity;
-			if ( cubeGridEntity != null )
+			MyCubeGrid grid = (linkedObject as CubeGridWrapper)?.Grid;
+			if ( grid != null )
 			{
-				cubeGridEntity.Repair( );
+				grid.Repair( );
 
 				TRV_Entities.BeginUpdate( );
 
-				RenderCubeGridChildNodes( cubeGridEntity, selectedNode );
+				RenderCubeGridChildNodes( grid, selectedNode );
 
 				TRV_Entities.EndUpdate( );
 			}
 
-			CubeBlockEntity cubeBlockEntity = linkedObject as CubeBlockEntity;
-			if ( cubeBlockEntity != null )
+			MySlimBlock block = (linkedObject as SlimBlockWrapper)?.SlimBlock;
+			if ( block != null )
 			{
-				cubeBlockEntity.Repair( );
+				block.Repair( );
 			}
 
 			BTN_Entities_Export.Enabled = previousExportButtonState;
@@ -2242,15 +2563,20 @@ namespace SEServerExtender
 				m_entityTreeRefreshTimer.Stop( );
 			}
 		}
+        
+        private void CHK_ProfileBlocks_CheckedChanged(object sender, EventArgs e)
+        {
+            ProfilerInjection.ProfilePerBlock = CHK_ProfileBlocks.Checked;
+        }
 
-		private void PG_Entities_Details_Click( object s, PropertyValueChangedEventArgs e )
-		{
+        private void CHK_PauseProfiler_CheckedChanged(object sender, EventArgs e)
+        {
+            m_profilerPaused = CHK_PauseProfiler.Checked;
+        }
 
-		}
-
-		private void PG_Entities_Details_Click( object sender, SelectedGridItemChangedEventArgs e )
-		{
-
-		}
-	}
+        private void CHK_ProfileGrids_CheckedChanged(object sender, EventArgs e)
+        {
+            ProfilerInjection.ProfilePerGrid = CHK_ProfileBlocks.Checked;
+        }
+    }
 }

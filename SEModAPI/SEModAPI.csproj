@@ -1,5 +1,5 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -9,7 +9,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>SEModAPI</RootNamespace>
     <AssemblyName>SEModAPI</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
     <PublishUrl>publish\</PublishUrl>
@@ -52,40 +52,55 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
     <DebugSymbols>true</DebugSymbols>
-    <OutputPath>bin\x64\Debug\</OutputPath>
+    <OutputPath>..\bin\x64\DedicatedServer64\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <DebugType>full</DebugType>
-    <PlatformTarget>AnyCPU</PlatformTarget>
+    <PlatformTarget>x64</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
-    <OutputPath>bin\x64\Release\</OutputPath>
+    <OutputPath>..\bin\x64\DedicatedServer64\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <Optimize>true</Optimize>
     <DebugType>pdbonly</DebugType>
     <PlatformTarget>x64</PlatformTarget>
     <ErrorReport>prompt</ErrorReport>
     <CodeAnalysisRuleSet>AllRules.ruleset</CodeAnalysisRuleSet>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="NLog, Version=3.2.1.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\packages\NLog.3.2.1\lib\net40\NLog.dll</HintPath>
+    <Reference Include="NLog, Version=4.0.0.0, Culture=neutral, PublicKeyToken=5120e14c03d0593c, processorArchitecture=MSIL">
+      <HintPath>..\packages\NLog.4.3.7\lib\net45\NLog.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="Sandbox.Common">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\GameLibraries\Sandbox.Common.dll</HintPath>
-    </Reference>
-    <Reference Include="Sandbox.Common.XmlSerializers">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\GameLibraries\Sandbox.Common.XmlSerializers.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="Sandbox.Game">
       <HintPath>..\GameLibraries\Sandbox.Game.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="SpaceEngineers.Game">
       <HintPath>..\GameLibraries\SpaceEngineers.Game.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SpaceEngineers.ObjectBuilders, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\SpaceEngineers.ObjectBuilders.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SpaceEngineers.ObjectBuilders.XmlSerializers, Version=1.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\SpaceEngineers.ObjectBuilders.XmlSerializers.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="SteamSDK, Version=0.0.0.0, Culture=neutral, processorArchitecture=AMD64">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\GameLibraries\SteamSDK.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
@@ -93,63 +108,45 @@
     <Reference Include="System.Design" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
     <Reference Include="VRage">
       <HintPath>..\GameLibraries\VRage.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="VRage.Dedicated">
+      <HintPath>..\GameLibraries\VRage.Dedicated.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="VRage.Game">
       <HintPath>..\GameLibraries\VRage.Game.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="VRage.Library">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\GameLibraries\VRage.Library.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="VRage.Math">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\GameLibraries\VRage.Math.dll</HintPath>
+      <Private>False</Private>
     </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="API\Definitions\ConfigFileSerializer.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\AirVentDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\ShipDrillDefinition.cs" />
     <Compile Include="API\Definitions\DedicatedConfigDefinition.cs" />
     <Compile Include="API\Definitions\DefinitionOverLayer.cs" />
-    <Compile Include="API\Definitions\AmmoMagazinesDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\AssemblerDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\BlockDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\CargoContainerDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\CockpitDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\BlocksManager.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\GravityGeneratorDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\GyroscopeDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\LightingBlockDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\MergeBlockDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\MotorStatorDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\OreDetectorDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\ReactorDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\RefineryDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\SolarPanelDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\ThrustersDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\VirtualMassDefinition.cs" />
     <Compile Include="API\Definitions\OverLayerDefinition.cs" />
     <Compile Include="API\Definitions\BlueprintsDefinition.cs" />
-    <Compile Include="API\Definitions\ComponentsDefinition.cs" />
-    <Compile Include="API\Definitions\ConfigurationDefinition.cs" />
-    <Compile Include="API\Definitions\ContainerTypesDefinition.cs" />
-    <Compile Include="API\Definitions\EnvironmentDefinition.cs" />
-    <Compile Include="API\Definitions\HandItemsDefinition.cs" />
-    <Compile Include="API\Definitions\PhysicalItemsDefinition.cs" />
     <Compile Include="API\Definitions\ScenariosDefinition.cs" />
-    <Compile Include="API\Definitions\SpawnGroupsDefinition.cs" />
     <Compile Include="API\Definitions\GlobalEventsDefinition.cs" />
-    <Compile Include="API\Definitions\CubeBlocks\CubeBlockDefinition.cs" />
-    <Compile Include="API\Definitions\TransparentMaterialsDefinition.cs" />
-    <Compile Include="API\Definitions\VoxelMaterialsDefinition.cs" />
+    <Compile Include="API\ExtenderOptions.cs" />
     <Compile Include="API\GameInstallation.cs" />
+    <Compile Include="API\Sandbox\MySandboxGameWrapper.cs" />
     <Compile Include="API\SEModAPIExceptions.cs" />
     <Compile Include="API\TypeConverters\Vector3Wrapper.cs" />
     <Compile Include="API\TypeConverters\Vector3DTypeConverter.cs" />
@@ -157,15 +154,22 @@
     <Compile Include="API\TypeConverters\Vector3TypeConverter.cs" />
     <Compile Include="API\TypeConverters\Vector3ITypeConverter.cs" />
     <Compile Include="API\Utility\CommandParser.cs" />
+    <Compile Include="API\Utility\FileSystem.cs" />
+    <Compile Include="API\Utility\Reflection.cs" />
     <Compile Include="AssemblyFileVersion.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
       <DependentUpon>AssemblyFileVersion.tt</DependentUpon>
     </Compile>
-    <Compile Include="Interop\ClassType.cs" />
-    <Compile Include="Interop\CubeType.cs" />
+    <Compile Include="BlockLimitConfig.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="BlockLimitConfig.Designer.cs">
+      <DependentUpon>BlockLimitConfig.cs</DependentUpon>
+    </Compile>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Support\AutoException.cs" />
+    <Compile Include="UIEditors.cs" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.0">
@@ -198,6 +202,11 @@
   </ItemGroup>
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="BlockLimitConfig.resx">
+      <DependentUpon>BlockLimitConfig.cs</DependentUpon>
+    </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

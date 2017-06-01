@@ -1,3 +1,5 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Entity.Sector
 {
 	using System.ComponentModel;
@@ -63,7 +65,7 @@ namespace SEModAPIInternal.API.Entity.Sector
 		[ReadOnly( true )]
 		public SerializableDefinitionId DefinitionId
 		{
-			get { return ObjectBuilder.DefinitionId; }
+			get { return ObjectBuilder.DefinitionId.Value; }
 			set
 			{
 				if ( ObjectBuilder.DefinitionId.Equals( value ) ) return;

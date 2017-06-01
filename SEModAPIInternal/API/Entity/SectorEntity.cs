@@ -1,21 +1,29 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Entity
 {
-	using System;
-	using System.Collections.Generic;
-	using System.ComponentModel;
-	using System.IO;
-	using Microsoft.Xml.Serialization.GeneratedAssembly;
-	using Sandbox.Common.ObjectBuilders;
-	using Sandbox.Common.ObjectBuilders.Voxels;
-	using SEModAPIInternal.API.Common;
-	using SEModAPIInternal.API.Entity.Sector;
-	using SEModAPIInternal.API.Entity.Sector.SectorObject;
-	using SEModAPIInternal.API.Utility;
-	using SEModAPIInternal.Support;
-	using VRage.ObjectBuilders;
-	using VRageMath;
-
-	public class SectorEntity : BaseObject
+    using System;
+    using System.Collections.Generic;
+    using System.ComponentModel;
+    using System.IO;
+    using Sandbox;
+    using Sandbox.Common.ObjectBuilders;
+    using Sandbox.Game.Entities;
+    using Sandbox.Game.Multiplayer;
+    using Sandbox.ModAPI;
+    using SEModAPI.API;
+    using SEModAPI.API.Utility;
+    using SEModAPIInternal.API.Common;
+    using SEModAPIInternal.API.Entity.Sector;
+    using SEModAPIInternal.API.Entity.Sector.SectorObject;
+    using SEModAPIInternal.API.Utility;
+    using SEModAPIInternal.Support;
+    using VRage.ObjectBuilders;
+    using VRageMath;
+    using Sandbox.Engine.Multiplayer;
+    using Sandbox.Game.Replication;
+    using VRage.Game.Entity;
+    public class SectorEntity : BaseObject
 	{
 		#region "Attributes"
 
@@ -49,7 +57,7 @@ namespace SEModAPIInternal.API.Entity
 			}
 
 			List<CubeGridEntity> cubeGrids = new List<CubeGridEntity>( );
-			List<VoxelMap> voxelMaps = new List<VoxelMap>( );
+			//List<VoxelMap> voxelMaps = new List<VoxelMap>( );
 			List<FloatingObject> floatingObjects = new List<FloatingObject>( );
 			List<Meteor> meteors = new List<Meteor>( );
 			foreach ( MyObjectBuilder_EntityBase sectorObject in definition.SectorObjects )
@@ -58,10 +66,10 @@ namespace SEModAPIInternal.API.Entity
 				{
 					cubeGrids.Add( new CubeGridEntity( (MyObjectBuilder_CubeGrid)sectorObject ) );
 				}
-				else if ( sectorObject.TypeId == typeof( MyObjectBuilder_VoxelMap ) )
-				{
-					voxelMaps.Add( new VoxelMap( (MyObjectBuilder_VoxelMap)sectorObject ) );
-				}
+				//else if ( sectorObject.TypeId == typeof( MyObjectBuilder_VoxelMap ) )
+				//{
+					//voxelMaps.Add( new VoxelMap( (MyObjectBuilder_VoxelMap)sectorObject ) );
+				//}
 				else if ( sectorObject.TypeId == typeof( MyObjectBuilder_FloatingObject ) )
 				{
 					floatingObjects.Add( new FloatingObject( (MyObjectBuilder_FloatingObject)sectorObject ) );
@@ -75,7 +83,7 @@ namespace SEModAPIInternal.API.Entity
 			//Build the managers from the lists
 			m_eventManager.Load( events );
 			m_cubeGridManager.Load( cubeGrids );
-			m_voxelMapManager.Load( voxelMaps );
+			//m_voxelMapManager.Load( voxelMaps );
 			m_floatingObjectManager.Load( floatingObjects );
 			m_meteorManager.Load( meteors );
 		}
@@ -120,10 +128,10 @@ namespace SEModAPIInternal.API.Entity
 					{
 						baseSector.SectorObjects.Add( item.ObjectBuilder );
 					}
-					foreach ( VoxelMap item in m_voxelMapManager.GetTypedInternalData<VoxelMap>( ) )
-					{
-						baseSector.SectorObjects.Add( item.ObjectBuilder );
-					}
+					//foreach ( VoxelMap item in m_voxelMapManager.GetTypedInternalData<VoxelMap>( ) )
+					//{
+					//	baseSector.SectorObjects.Add( item.ObjectBuilder );
+					//}
 					foreach ( FloatingObject item in m_floatingObjectManager.GetTypedInternalData<FloatingObject>( ) )
 					{
 						baseSector.SectorObjects.Add( item.ObjectBuilder );
@@ -178,7 +186,7 @@ namespace SEModAPIInternal.API.Entity
 				return newList;
 			}
 		}
-
+        /*
 		[Category( "Sector" )]
 		[Browsable( false )]
 		public List<VoxelMap> VoxelMaps
@@ -189,7 +197,7 @@ namespace SEModAPIInternal.API.Entity
 				return newList;
 			}
 		}
-
+        */
 		[Category( "Sector" )]
 		[Browsable( false )]
 		public List<FloatingObject> FloatingObjects
@@ -220,8 +228,8 @@ namespace SEModAPIInternal.API.Entity
 		{
 			if ( newType == typeof( CubeGridEntity ) )
 				return m_cubeGridManager.NewEntry<CubeGridEntity>( );
-			if ( newType == typeof( VoxelMap ) )
-				return m_voxelMapManager.NewEntry<VoxelMap>( );
+			//if ( newType == typeof( VoxelMap ) )
+			//	return m_voxelMapManager.NewEntry<VoxelMap>( );
 			if ( newType == typeof( FloatingObject ) )
 				return m_floatingObjectManager.NewEntry<FloatingObject>( );
 			if ( newType == typeof( Meteor ) )
@@ -235,8 +243,8 @@ namespace SEModAPIInternal.API.Entity
 			Type deleteType = source.GetType( );
 			if ( deleteType == typeof( CubeGridEntity ) )
 				return m_cubeGridManager.DeleteEntry( (CubeGridEntity)source );
-			if ( deleteType == typeof( VoxelMap ) )
-				return m_voxelMapManager.DeleteEntry( (VoxelMap)source );
+			//if ( deleteType == typeof( VoxelMap ) )
+			//	return m_voxelMapManager.DeleteEntry( (VoxelMap)source );
 			if ( deleteType == typeof( FloatingObject ) )
 				return m_floatingObjectManager.DeleteEntry( (FloatingObject)source );
 			if ( deleteType == typeof( Meteor ) )
@@ -253,11 +261,10 @@ namespace SEModAPIInternal.API.Entity
 		#region "Attributes"
 
 		private static SectorObjectManager m_instance;
-		private static Queue<BaseEntity> m_addEntityQueue = new Queue<BaseEntity>( );
+		private static readonly Queue<BaseEntity> AddEntityQueue = new Queue<BaseEntity>( );
 
 		public static string ObjectManagerNamespace = "Sandbox.Game.Entities";
 		public static string ObjectManagerClass = "MyEntities";
-		public static string ObjectManagerGetEntityHashSet = "GetEntities";
 		public static string ObjectManagerAddEntity = "Add";
 
 		/////////////////////////////////////////////////////////////////
@@ -311,7 +318,7 @@ namespace SEModAPIInternal.API.Entity
 		{
 			get
 			{
-				if ( m_addEntityQueue.Count >= 25 )
+				if ( AddEntityQueue.Count >= 25 )
 					return true;
 
 				return false;
@@ -330,8 +337,7 @@ namespace SEModAPIInternal.API.Entity
 				if ( type == null )
 					throw new Exception( "Could not find internal type for SectorObjectManager" );
 				bool result = true;
-				result &= BaseObject.HasMethod( type, ObjectManagerGetEntityHashSet );
-				result &= BaseObject.HasMethod( type, ObjectManagerAddEntity );
+				result &= Reflection.HasMethod( type, ObjectManagerAddEntity );
 
 				Type type2 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( ObjectFactoryNamespace, ObjectFactoryClass );
 				if ( type2 == null )
@@ -340,7 +346,7 @@ namespace SEModAPIInternal.API.Entity
 				Type type3 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( EntityBaseNetManagerNamespace, EntityBaseNetManagerClass );
 				if ( type3 == null )
 					throw new Exception( "Could not find entity base network manager type for SectorObjectManager" );
-				result &= BaseObject.HasMethod( type3, EntityBaseNetManagerSendEntity );
+				result &= Reflection.HasMethod( type3, EntityBaseNetManagerSendEntity );
 
 				return result;
 			}
@@ -362,7 +368,7 @@ namespace SEModAPIInternal.API.Entity
 				Type entityType = entity.GetType( );
 				if ( entityType != CharacterEntity.InternalType &&
 					entityType != CubeGridEntity.InternalType &&
-					entityType != VoxelMap.InternalType &&
+					//entityType != VoxelMap.InternalType &&
 					entityType != FloatingObject.InternalType &&
 					entityType != Meteor.InternalType
 					)
@@ -399,7 +405,7 @@ namespace SEModAPIInternal.API.Entity
 
 				m_rawDataHashSetResourceLock.AcquireExclusive( );
 
-				object rawValue = BaseObject.InvokeStaticMethod( InternalType, ObjectManagerGetEntityHashSet );
+				object rawValue = MyEntities.GetEntities( );
 				if ( rawValue == null )
 					return;
 
@@ -479,7 +485,7 @@ namespace SEModAPIInternal.API.Entity
 					}
 					catch ( Exception ex )
 					{
-						ApplicationLog.BaseLog.Error( ex );
+						//ApplicationLog.BaseLog.Error( ex );
 					}
 				}
 
@@ -493,13 +499,13 @@ namespace SEModAPIInternal.API.Entity
 					}
 					catch ( Exception ex )
 					{
-						ApplicationLog.BaseLog.Error( ex );
+						//ApplicationLog.BaseLog.Error( ex );
 					}
 				}
 			}
 			catch ( Exception ex )
 			{
-				ApplicationLog.BaseLog.Error( ex );
+				//ApplicationLog.BaseLog.Error( ex );
 			}
 		}
 
@@ -507,18 +513,17 @@ namespace SEModAPIInternal.API.Entity
 		{
 			try
 			{
-				if ( m_addEntityQueue.Count >= 25 )
+				if ( AddEntityQueue.Count >= 25 )
 				{
 					throw new Exception( "AddEntity queue is full. Cannot add more entities yet" );
 				}
 
-				if ( SandboxGameAssemblyWrapper.IsDebugging )
-					ApplicationLog.BaseLog.Debug( entity.GetType( ).Name + " '" + entity.Name + "' is being added ..." );
+				if ( ExtenderOptions.IsDebugging )
+					ApplicationLog.BaseLog.Debug(String.Format("{0} '{1}': Is being added...", entity.GetType().Name, entity.DisplayName));
 
-				m_addEntityQueue.Enqueue( entity );
+				AddEntityQueue.Enqueue( entity );
 
-				Action action = InternalAddEntity;
-				SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+				MySandboxGame.Static.Invoke( InternalAddEntity );
 			}
 			catch ( Exception ex )
 			{
@@ -530,13 +535,13 @@ namespace SEModAPIInternal.API.Entity
 		{
 			try
 			{
-				if ( m_addEntityQueue.Count == 0 )
+				if ( AddEntityQueue.Count == 0 )
 					return;
 
-				BaseEntity entityToAdd = m_addEntityQueue.Dequeue( );
+				BaseEntity entityToAdd = AddEntityQueue.Dequeue( );
 
-				if ( SandboxGameAssemblyWrapper.IsDebugging )
-					ApplicationLog.BaseLog.Debug( entityToAdd.GetType( ).Name + " '" + entityToAdd.GetType( ).Name + "': Adding to scene ..." );
+                if (ExtenderOptions.IsDebugging)
+                    ApplicationLog.BaseLog.Debug(String.Format("{0} '{1}': Adding to scene...", entityToAdd.GetType().Name, entityToAdd.DisplayName));
 
 				//Create the backing object
 				Type entityType = entityToAdd.GetType( );
@@ -545,19 +550,19 @@ namespace SEModAPIInternal.API.Entity
 					throw new Exception( "Could not get internal type of entity" );
 				entityToAdd.BackingObject = Activator.CreateInstance( internalType );
 
-				//Initialize the backing object
-				//BaseEntity.InvokeEntityMethod( entityToAdd.BackingObject, "Init", new object[ ] { entityToAdd.ObjectBuilder } );
-				BaseEntity.InvokeEntityMethod(entityToAdd.BackingObject, "Init", new object[] { entityToAdd.ObjectBuilder }, new Type[] { typeof(MyObjectBuilder_EntityBase) });
-
 				//Add the backing object to the main game object manager
-				BaseEntity.InvokeStaticMethod( InternalType, ObjectManagerAddEntity, new object[ ] { entityToAdd.BackingObject, true } );
+                //I don't think this is actually used anywhere?
+				MyEntity backingObject = (MyEntity)entityToAdd.BackingObject;
 
-				if ( entityToAdd is FloatingObject )
+                MyEntity newEntity = MyEntities.CreateFromObjectBuilderAndAdd(entityToAdd.ObjectBuilder);
+                
+
+                if ( entityToAdd is FloatingObject )
 				{
 					try
 					{
 						//Broadcast the new entity to the clients
-						MyObjectBuilder_EntityBase baseEntity = (MyObjectBuilder_EntityBase)BaseEntity.InvokeEntityMethod( entityToAdd.BackingObject, BaseEntity.BaseEntityGetObjectBuilderMethod, new object[ ] { Type.Missing } );
+						MyObjectBuilder_EntityBase baseEntity = backingObject.GetObjectBuilder( );
 						//TODO - Do stuff
 
 						entityToAdd.ObjectBuilder = baseEntity;
@@ -573,12 +578,10 @@ namespace SEModAPIInternal.API.Entity
 					try
 					{
 						//Broadcast the new entity to the clients
-						MyObjectBuilder_EntityBase baseEntity = (MyObjectBuilder_EntityBase)BaseEntity.InvokeEntityMethod( entityToAdd.BackingObject, BaseEntity.BaseEntityGetObjectBuilderMethod, new object[ ] { Type.Missing } );
-						Type someManager = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( EntityBaseNetManagerNamespace, EntityBaseNetManagerClass );
-						BaseEntity.InvokeStaticMethod( someManager, EntityBaseNetManagerSendEntity, new object[ ] { baseEntity } );
-
-						entityToAdd.ObjectBuilder = baseEntity;
-					}
+                        ApplicationLog.BaseLog.Info("Broadcasted entity to clients.");
+                        MyMultiplayer.ReplicateImmediatelly( MyExternalReplicable.FindByObject( newEntity ) );
+                        //the misspelling in this function name is driving me  i n s a n e
+                    }
 					catch ( Exception ex )
 					{
 						ApplicationLog.BaseLog.Error( "Failed to broadcast new entity" );
@@ -586,10 +589,10 @@ namespace SEModAPIInternal.API.Entity
 					}
 				}
 
-				if ( SandboxGameAssemblyWrapper.IsDebugging )
+				if ( ExtenderOptions.IsDebugging )
 				{
 					Type type = entityToAdd.GetType( );
-					ApplicationLog.BaseLog.Debug( type.Name + " '" + entityToAdd.Name + "': Finished adding to scene" );
+					ApplicationLog.BaseLog.Debug(String.Format("{0} '{1}': Finished adding to scene", entityToAdd.GetType().Name, entityToAdd.DisplayName));
 				}
 			}
 			catch ( Exception ex )
@@ -634,7 +637,8 @@ namespace SEModAPIInternal.API.Entity
 			FileInfo = fileInfo;
 
 			//Read in the sector data
-			MyObjectBuilder_Sector data = ReadSpaceEngineersFile<MyObjectBuilder_Sector, MyObjectBuilder_SectorSerializer>( this.FileInfo.FullName );
+			MyObjectBuilder_Sector data;
+			MyObjectBuilderSerializer.DeserializeXML(FileInfo.FullName,out data );
 
 			//And instantiate the sector with the data
 			m_Sector = new SectorEntity( data );
@@ -642,7 +646,7 @@ namespace SEModAPIInternal.API.Entity
 
 		new public bool Save( )
 		{
-			return WriteSpaceEngineersFile<MyObjectBuilder_Sector, MyObjectBuilder_SectorSerializer>( m_Sector.ObjectBuilder, this.FileInfo.FullName );
+			return MyObjectBuilderSerializer.SerializeXML( FileInfo.FullName, false, m_Sector.ObjectBuilder );
 		}
 
 		#endregion "Methods"

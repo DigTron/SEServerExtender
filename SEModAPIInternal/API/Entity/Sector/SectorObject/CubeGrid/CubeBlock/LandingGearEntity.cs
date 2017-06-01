@@ -4,7 +4,9 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 	using System.ComponentModel;
 	using System.Reflection;
 	using System.Runtime.Serialization;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
 
@@ -107,7 +109,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				if ( BackingObject != null && ActualObject != null )
 				{
 					Action action = InternalUpdateIsLocked;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( action );
 				}
 			}
 		}
@@ -134,7 +136,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				if ( BackingObject != null && ActualObject != null )
 				{
 					Action action = InternalUpdateAutoLockEnabled;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( action );
 				}
 			}
 		}
@@ -160,8 +162,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null && ActualObject != null )
 				{
-					Action action = InternalUpdateBrakeForce;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateBrakeForce );
 				}
 			}
 		}
@@ -187,13 +188,13 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 					throw new Exception( "Could not find internal type for LandingGearEntity" );
 
 				//result &= HasMethod(type, LandingGearGetAutoLockMethod);
-				result &= HasMethod( type, LandingGearSetAutoLockMethod );
-				result &= HasMethod( type, LandingGearGetBrakeForceMethod );
-				result &= HasMethod( type, LandingGearSetBrakeForceMethod );
+				result &= Reflection.HasMethod( type, LandingGearSetAutoLockMethod );
+				result &= Reflection.HasMethod( type, LandingGearGetBrakeForceMethod );
+				result &= Reflection.HasMethod( type, LandingGearSetBrakeForceMethod );
 
-				result &= HasField( type, LandingGearGetAutoLockField );
-				result &= HasField( type, LandingGearIsLockedField );
-				result &= HasField( type, LandingGearNetManagerField );
+				result &= Reflection.HasField( type, LandingGearGetAutoLockField );
+				result &= Reflection.HasField( type, LandingGearIsLockedField );
+				result &= Reflection.HasField( type, LandingGearNetManagerField );
 
 				return result;
 			}
@@ -332,9 +333,9 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				Type type = InternalType;
 				if ( type == null )
 					throw new Exception( "Could not find internal type for LandingGearNetworkManager" );
-				result &= BaseObject.HasMethod( type, LandingGearNetworkManagerBroadcastIsLockedMethod );
-				result &= BaseObject.HasMethod( type, LandingGearNetworkManagerBroadcastAutoLockMethod );
-				result &= BaseObject.HasMethod( type, LandingGearNetworkManagerBroadcastBrakeForceMethod );
+				result &= Reflection.HasMethod( type, LandingGearNetworkManagerBroadcastIsLockedMethod );
+				result &= Reflection.HasMethod( type, LandingGearNetworkManagerBroadcastAutoLockMethod );
+				result &= Reflection.HasMethod( type, LandingGearNetworkManagerBroadcastBrakeForceMethod );
 
 				return result;
 			}

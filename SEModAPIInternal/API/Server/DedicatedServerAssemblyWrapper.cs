@@ -1,4 +1,11 @@
-﻿namespace SEModAPIInternal.API.Server
+﻿using System.Linq;
+using SEModAPI.API;
+using VRage.Game;
+using VRage.ObjectBuilders;
+using VRage.Plugins;
+using VRage.Utils;
+
+namespace SEModAPIInternal.API.Server
 {
 	using System;
 	using System.ComponentModel;
@@ -8,7 +15,10 @@
 	using System.Runtime.InteropServices;
 	using System.Security;
 	using Havok;
+	using Sandbox;
 	using Sandbox.Game;
+	using SEModAPI.API.Sandbox;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.API.Entity;
 	using SEModAPIInternal.Support;
@@ -22,11 +32,13 @@
 	public class DedicatedServerAssemblyWrapper
 	{
 		private static DedicatedServerAssemblyWrapper _instance;
-		private static Assembly _assembly;
+		//private static Assembly _assembly;
 
 		public const string DedicatedServerNamespace = "VRage.Dedicated";
 		public const string DedicatedServerClass = "DedicatedServer";
 		public const string DedicatedServerRunMainMethod = "RunMain";
+
+	    public static bool IsStable;
 
 		#region "Constructors and Initializers"
 
@@ -34,8 +46,8 @@
 		{
 			_instance = this;
 
-			string assemblyPath = Path.Combine( AppDomain.CurrentDomain.BaseDirectory, "VRage.Dedicated.dll" );
-			_assembly = Assembly.UnsafeLoadFrom( assemblyPath );
+			//string assemblyPath = Path.Combine( AppDomain.CurrentDomain.BaseDirectory, "VRage.Dedicated.dll" );
+			//_assembly = Assembly.UnsafeLoadFrom( assemblyPath );
 
 			ApplicationLog.BaseLog.Info( "Finished loading DedicatedServerAssemblyWrapper" );
 		}
@@ -69,7 +81,7 @@
 				if ( dedicatedServerType == null )
 					throw new Exception( "Could not find internal type for DedicatedServerAssemblyWrapper" );
 				bool result = true;
-				result &= BaseObject.HasMethod( dedicatedServerType, DedicatedServerRunMainMethod );
+				result &= Reflection.HasMethod( dedicatedServerType, DedicatedServerRunMainMethod );
 
 				return result;
 			}
@@ -161,7 +173,7 @@
 		{
 			try
 			{
-				SandboxGameAssemblyWrapper.Instance.SetNullRender( true );
+				Sandbox.Engine.Platform.Game.IsDedicated = true;
 				MyFileSystem.Reset( );
 
 				//Prepare the parameters
@@ -175,19 +187,24 @@
 
 				//Initialize config
 				SpaceEngineersGame.SetupPerGameSettings();
-				MyPerGameSettings.SendLogToKeen = DedicatedServer.SendLogToKeen;
+			    SpaceEngineersGame.SetupBasicGameInfo();
+                if(MyFinalBuildConstants.APP_VERSION == null) //KEEN WHAT THE FUCK
+                    MyFinalBuildConstants.APP_VERSION = MyPerGameSettings.BasicGameInfo.GameVersion; 
+                MyPerGameSettings.SendLogToKeen = DedicatedServer.SendLogToKeen;
 				MyPerServerSettings.GameName = MyPerGameSettings.GameName;
 				MyPerServerSettings.GameNameSafe = MyPerGameSettings.GameNameSafe;
 				MyPerServerSettings.GameDSName = MyPerServerSettings.GameNameSafe + "Dedicated";
 				MyPerServerSettings.GameDSDescription = "Your place for space engineering, destruction and exploring.";
 				MyPerServerSettings.AppId = 0x3bc72;
-
-				//Start the server
-				MethodInfo dedicatedServerRunMainMethod = InternalType.GetMethod( DedicatedServerRunMainMethod, BindingFlags.Static | BindingFlags.NonPublic );
+                
+                //Start the server
+                MethodInfo dedicatedServerRunMainMethod = InternalType.GetMethod( DedicatedServerRunMainMethod, BindingFlags.Static | BindingFlags.NonPublic );
 				dedicatedServerRunMainMethod.Invoke( null, methodParams );
+			    ApplicationLog.BaseLog.Info( MyLog.Default.GetFilePath());
 
-				return true;
+                return true;
 			}
+            /* these are all redundant
 			catch ( Win32Exception ex )
 			{
 				ApplicationLog.BaseLog.Error( ex );
@@ -202,12 +219,14 @@
 			}
 			catch ( TargetInvocationException ex )
 			{
-				//Generally, we won't log this, since it will always be thrown on server stop.
-				if ( ApplicationLog.BaseLog.IsTraceEnabled )
-					ApplicationLog.BaseLog.Trace( ex );
+                //Generally, we won't log this, since it will always be thrown on server stop.
+                //if ( ExtenderOptions.IsDebugging )
+                    ApplicationLog.BaseLog.Error( ex );
+                //ApplicationLog.BaseLog.Trace( ex );
 
-				return false;
+                return false;
 			}
+            */
 			catch ( Exception ex )
 			{
 				ApplicationLog.BaseLog.Error( ex );
@@ -243,8 +262,7 @@
 				TimeSpan cleanupTime = DateTime.Now - startedEntityCleanup;
 				ApplicationLog.BaseLog.Debug("Took " + cleanupTime.TotalSeconds.ToString() + " seconds to clean up entities");
 				*/
-				Object mainGame = SandboxGameAssemblyWrapper.MainGame;
-				BaseObject.InvokeEntityMethod( mainGame, "Dispose" );
+				MySandboxGame.Static.Exit( );
 			}
 			catch ( Exception ex )
 			{

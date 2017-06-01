@@ -1,12 +1,15 @@
+using VRage.Game;
+
 namespace SEModAPIExtensions.API
 {
-	using System;
-	using System.IO;
-	using Sandbox.Common.ObjectBuilders;
-	using SEModAPIInternal.Support;
-	using VRage.ObjectBuilders;
+    using System;
+    using System.IO;
+    using Sandbox.Common.ObjectBuilders;
+    using SEModAPI.API;
+    using SEModAPIInternal.Support;
+    using VRage.ObjectBuilders;
 
-	public class SessionManager
+    public class SessionManager
 	{
 		private static MyObjectBuilder_Checkpoint m_checkPoint;
 		private static SessionManager m_instance;
@@ -51,7 +54,7 @@ namespace SEModAPIExtensions.API
 		{
 			MyConfigDedicatedData<MyObjectBuilder_SessionSettings> config = Server.Instance.LoadServerConfig( );
 
-			ApplicationLog.BaseLog.Info( "Loading Session Settings" );
+            ApplicationLog.BaseLog.Info( "Loading Session Settings" );
 			try
 			{
 				string worldPath = config.LoadWorld;
@@ -63,7 +66,7 @@ namespace SEModAPIExtensions.API
 					return;
 
 				m_checkPoint.Settings = config.SessionSettings;
-				m_checkPoint.Scenario = config.Scenario;
+				//m_checkPoint.Scenario = config.Scenario;
 
 				m_checkPoint.Mods.Clear( );
 				foreach ( ulong modid in config.Mods )
@@ -81,8 +84,9 @@ namespace SEModAPIExtensions.API
 			}
 			catch (Exception ex)
 			{
-				ApplicationLog.BaseLog.Error( "Session Manager Exception: {0}", ex );
-			}
-		}
+                if ( ExtenderOptions.IsDebugging )
+                    ApplicationLog.BaseLog.Error( ex, "Session Manager Exception: {0}" );
+            }
+        }
 	}
 }

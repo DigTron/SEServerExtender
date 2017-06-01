@@ -1,3 +1,6 @@
+using VRage.Game;
+using VRage.Game.ModAPI;
+
 namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 {
 	using System;
@@ -5,15 +8,17 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 	using System.ComponentModel;
 	using System.IO;
 	using System.Runtime.Serialization;
-	using Microsoft.Xml.Serialization.GeneratedAssembly;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
 	using Sandbox.Definitions;
 	using Sandbox.ModAPI;
 	using SEModAPI.API.TypeConverters;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.API.Utility;
 	using SEModAPIInternal.Support;
 	using VRage;
+	using VRage.ObjectBuilders;
 	using VRageMath;
 
 	[DataContract( Name = "CubeBlockEntityProxy" )]
@@ -332,8 +337,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateColorMaskHSV;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateColorMaskHSV );
 				}
 			}
 		}
@@ -361,8 +365,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateConstructionManager;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateConstructionManager );
 				}
 			}
 		}
@@ -390,8 +393,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateConstructionManager;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateConstructionManager );
 				}
 			}
 		}
@@ -416,8 +418,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalSetOwnerShareMode;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalSetOwnerShareMode );
 				}
 			}
 		}
@@ -442,8 +443,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalSetOwnerShareMode;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalSetOwnerShareMode );
 				}
 			}
 		}
@@ -567,7 +567,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 
 		public override void Export( FileInfo fileInfo )
 		{
-			BaseObjectManager.SaveContentFile<MyObjectBuilder_CubeBlock, MyObjectBuilder_CubeBlockSerializer>( ObjectBuilder, fileInfo );
+			MyObjectBuilderSerializer.SerializeXML( fileInfo.FullName, false, ObjectBuilder );
 		}
 
 		new public static bool ReflectionUnitTest( )
@@ -579,46 +579,46 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 					throw new Exception( "Could not find internal type for CubeBlockEntity" );
 				bool result = true;
 
-				result &= HasMethod( type, CubeBlockGetObjectBuilderMethod );
-				result &= HasMethod( type, CubeBlockGetActualBlockMethod );
-				result &= HasMethod( type, CubeBlockDamageBlockMethod );
-				result &= HasMethod( type, CubeBlockGetBuildValueMethod );
-				result &= HasMethod( type, CubeBlockGetBuildPercentMethod );
-				result &= HasMethod( type, CubeBlockGetIntegrityValueMethod );
-				result &= HasMethod( type, CubeBlockGetMaxIntegrityValueMethod );
-				result &= HasMethod( type, CubeBlockUpdateWeldProgressMethod );
+				result &= Reflection.HasMethod( type, CubeBlockGetObjectBuilderMethod );
+				result &= Reflection.HasMethod( type, CubeBlockGetActualBlockMethod );
+				result &= Reflection.HasMethod( type, CubeBlockDamageBlockMethod );
+				result &= Reflection.HasMethod( type, CubeBlockGetBuildValueMethod );
+				result &= Reflection.HasMethod( type, CubeBlockGetBuildPercentMethod );
+				result &= Reflection.HasMethod( type, CubeBlockGetIntegrityValueMethod );
+				result &= Reflection.HasMethod( type, CubeBlockGetMaxIntegrityValueMethod );
+				result &= Reflection.HasMethod( type, CubeBlockUpdateWeldProgressMethod );
 
-				result &= HasField( type, CubeBlockParentCubeGridField );
-				result &= HasField( type, CubeBlockColorMaskHSVField );
-				result &= HasField( type, CubeBlockConstructionManagerField );
-				result &= HasField( type, CubeBlockCubeBlockDefinitionField );
+				result &= Reflection.HasField( type, CubeBlockParentCubeGridField );
+				result &= Reflection.HasField( type, CubeBlockColorMaskHSVField );
+				result &= Reflection.HasField( type, CubeBlockConstructionManagerField );
+				result &= Reflection.HasField( type, CubeBlockCubeBlockDefinitionField );
 
 				type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( ActualCubeBlockNamespace, ActualCubeBlockClass );
 				if ( type == null )
 					throw new Exception( "Could not find actual type for CubeBlockEntity" );
-				result &= HasMethod( type, ActualCubeBlockGetObjectBuilderMethod );
-				result &= HasMethod( type, ActualCubeBlockGetFactionsObjectMethod );
-				result &= HasMethod( type, ActualCubeBlockSetFactionsDataMethod );
-				result &= HasMethod( type, ActualCubeBlockGetMatrixMethod );
-				result &= HasMethod( type, ActualCubeBlockGetOwnerMethod );
+				result &= Reflection.HasMethod( type, ActualCubeBlockGetObjectBuilderMethod );
+				result &= Reflection.HasMethod( type, ActualCubeBlockGetFactionsObjectMethod );
+				result &= Reflection.HasMethod( type, ActualCubeBlockSetFactionsDataMethod );
+				result &= Reflection.HasMethod( type, ActualCubeBlockGetMatrixMethod );
+				result &= Reflection.HasMethod( type, ActualCubeBlockGetOwnerMethod );
 
 				type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( FactionsDataNamespace, FactionsDataClass );
 				if ( type == null )
 					throw new Exception( "Could not find factions data type for CubeBlockEntity" );
-				result &= HasField( type, FactionsDataOwnerField );
-				result &= HasField( type, FactionsDataShareModeField );
+				result &= Reflection.HasField( type, FactionsDataOwnerField );
+				result &= Reflection.HasField( type, FactionsDataShareModeField );
 
 				type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( ConstructionManagerNamespace, ConstructionManagerClass );
 				if ( type == null )
 					throw new Exception( "Could not find construction manager type for CubeBlockEntity" );
-				result &= HasMethod( type, ConstructionManagerSetIntegrityBuildValuesMethod );
-				result &= HasMethod( type, ConstructionManagerGetBuildValueMethod );
-				result &= HasMethod( type, ConstructionManagerGetIntegrityValueMethod );
-				result &= HasMethod( type, ConstructionManagerGetMaxIntegrityMethod );
-				result &= HasMethod( type, ConstructionManagerGetBuildPercentMethod );
-				result &= HasMethod( type, ConstructionManagerGetIntegrityPercentMethod );
-				result &= HasField( type, ConstructionManagerIntegrityValueField );
-				result &= HasField( type, ConstructionManagerBuildValueField );
+				result &= Reflection.HasMethod( type, ConstructionManagerSetIntegrityBuildValuesMethod );
+				result &= Reflection.HasMethod( type, ConstructionManagerGetBuildValueMethod );
+				result &= Reflection.HasMethod( type, ConstructionManagerGetIntegrityValueMethod );
+				result &= Reflection.HasMethod( type, ConstructionManagerGetMaxIntegrityMethod );
+				result &= Reflection.HasMethod( type, ConstructionManagerGetBuildPercentMethod );
+				result &= Reflection.HasMethod( type, ConstructionManagerGetIntegrityPercentMethod );
+				result &= Reflection.HasField( type, ConstructionManagerIntegrityValueField );
+				result &= Reflection.HasField( type, ConstructionManagerBuildValueField );
 
 				return result;
 			}
@@ -955,7 +955,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 					}
 					catch ( Exception ex )
 					{
-						ApplicationLog.BaseLog.Error( ex );
+						//ApplicationLog.BaseLog.Error( ex );
 					}
 				}
 
@@ -969,7 +969,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 					}
 					catch ( Exception ex )
 					{
-						ApplicationLog.BaseLog.Error( ex );
+						//ApplicationLog.BaseLog.Error( ex );
 					}
 				}
 
@@ -988,7 +988,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid
 			}
 			catch ( Exception ex )
 			{
-				ApplicationLog.BaseLog.Error( ex );
+				//ApplicationLog.BaseLog.Error( ex );
 			}
 		}
 

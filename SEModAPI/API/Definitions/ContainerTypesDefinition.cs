@@ -1,6 +1,8 @@
-﻿namespace SEModAPI.API.Definitions
+﻿using VRage.Game;
+
+namespace SEModAPI.API.Definitions
 {
-	using Sandbox.Common.ObjectBuilders.Definitions;
+	using global::Sandbox.Common.ObjectBuilders.Definitions;
 	using VRage.ObjectBuilders;
 	using VRage.Utils;
 
@@ -59,7 +61,7 @@
             get { return m_baseDefinition.TypeId; }
         }
 
-        public MyStringId SubtypeId
+        public MyStringHash SubtypeId
         {
             get { return m_baseDefinition.SubtypeId; }
         }

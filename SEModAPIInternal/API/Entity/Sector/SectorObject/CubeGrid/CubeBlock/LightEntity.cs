@@ -4,7 +4,9 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 	using System.ComponentModel;
 	using System.Reflection;
 	using System.Runtime.Serialization;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
 	using VRageMath;
@@ -91,8 +93,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateLight;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateLight );
 				}
 			}
 		}
@@ -110,8 +111,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateLight;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateLight );
 				}
 			}
 		}
@@ -129,8 +129,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateLight;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateLight );
 				}
 			}
 		}
@@ -148,8 +147,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateLight;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateLight );
 				}
 			}
 		}
@@ -167,8 +165,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateLight;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateLight );
 				}
 			}
 		}
@@ -186,8 +183,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateLight;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateLight );
 				}
 			}
 		}
@@ -205,8 +201,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateLight;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateLight );
 				}
 			}
 		}
@@ -224,8 +219,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateLight;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateLight );
 				}
 			}
 		}
@@ -286,11 +280,11 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				Type type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( LightNamespace, LightClass );
 				if ( type == null )
 					throw new Exception( "Could not find internal type for LightEntity" );
-				result &= HasMethod( type, LightUpdateColorMethod );
-				result &= HasMethod( type, LightUpdateIntensityMethod );
-				result &= HasMethod( type, LightUpdateFalloffMethod );
-				result &= HasMethod( type, LightUpdateRadiusMethod );
-				result &= HasField( type, LightNetworkManagerField );
+				result &= Reflection.HasMethod( type, LightUpdateColorMethod );
+				result &= Reflection.HasMethod( type, LightUpdateIntensityMethod );
+				result &= Reflection.HasMethod( type, LightUpdateFalloffMethod );
+				result &= Reflection.HasMethod( type, LightUpdateRadiusMethod );
+				result &= Reflection.HasField( type, LightNetworkManagerField );
 
 				Type type2 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( LightNetworkManagerNamespace, LightNetworkManagerClass );
 				if ( type2 == null )

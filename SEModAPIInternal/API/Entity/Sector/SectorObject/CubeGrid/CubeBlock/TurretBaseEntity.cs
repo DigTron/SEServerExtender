@@ -3,7 +3,9 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 	using System;
 	using System.ComponentModel;
 	using System.Runtime.Serialization;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
 
@@ -57,7 +59,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 			m_targetMeteors = definition.TargetMeteors;
 			m_targetMissiles = definition.TargetMissiles;
-			m_targetMoving = definition.TargetMoving;
 		}
 
 		public TurretBaseEntity( CubeGridEntity parent, MyObjectBuilder_TurretBase definition, Object backingObject )
@@ -71,7 +72,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 			m_targetMeteors = definition.TargetMeteors;
 			m_targetMissiles = definition.TargetMissiles;
-			m_targetMoving = definition.TargetMoving;
 		}
 
 		#endregion "Constructors and Intializers"
@@ -106,8 +106,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 			{
 				m_shootingRange = value;
 
-				Action action = SetShootingRange;
-				SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+				MySandboxGame.Static.Invoke( SetShootingRange );
 			}
 		}
 
@@ -127,8 +126,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 			{
 				m_searchingRange = value;
 
-				Action action = SetSearchingRange;
-				SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+				MySandboxGame.Static.Invoke( SetSearchingRange );
 			}
 		}
 
@@ -165,8 +163,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 			{
 				m_target = value;
 
-				Action action = SetTarget;
-				SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+				MySandboxGame.Static.Invoke( SetTarget );
 			}
 		}
 
@@ -235,8 +232,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 		{
 			get
 			{
-				if ( BackingObject == null || ActualObject == null )
-					return ObjectBuilder.TargetMoving;
 
 				return GetTargetMoving( );
 			}
@@ -297,15 +292,15 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				if ( type == null )
 					throw new Exception( "Could not find internal type for TurretBaseEntity" );
 
-				result &= HasMethod( type, TurretIsTargetMethod );
-				result &= HasMethod( type, TurretIsTargetVisibleMethod );
-				result &= HasMethod( type, TurretIsTargetInViewMethod );
-				result &= HasMethod( type, TurretIsTargetEnemyMethod );
-				result &= HasMethod( type, TurretGetNearestVisibleTargetMethod );
-				result &= HasMethod( type, TurretGetRemainingAmmoMethod );
+				result &= Reflection.HasMethod( type, TurretIsTargetMethod );
+				result &= Reflection.HasMethod( type, TurretIsTargetVisibleMethod );
+				result &= Reflection.HasMethod( type, TurretIsTargetInViewMethod );
+				result &= Reflection.HasMethod( type, TurretIsTargetEnemyMethod );
+				result &= Reflection.HasMethod( type, TurretGetNearestVisibleTargetMethod );
+				result &= Reflection.HasMethod( type, TurretGetRemainingAmmoMethod );
 
-				result &= HasField( type, TurretSearchingRangeField );
-				result &= HasField( type, TurretInventoryField );
+				result &= Reflection.HasField( type, TurretSearchingRangeField );
+				result &= Reflection.HasField( type, TurretInventoryField );
 
 				result &= HasProperty( type, TurretTargetProperty );
 				result &= HasProperty( type, TurretShootingRangeProperty );
@@ -367,8 +362,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 
 		public void Shoot( )
 		{
-			Action action = InternalTurretShoot;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalTurretShoot );
 		}
 
 		protected Object GetNetworkManager( )
@@ -552,9 +546,9 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject.CubeGrid.CubeBlock
 				if ( type == null )
 					throw new Exception( "Could not find internal type for TurretNetworkManager" );
 
-				result &= BaseObject.HasMethod( type, TurretNetworkManagerBroadcastTargetIdMethod );
-				result &= BaseObject.HasMethod( type, TurretNetworkManagerBroadcastRangeMethod );
-				result &= BaseObject.HasMethod( type, TurretNetworkManagerBroadcastTargettingFlagsMethod );
+				result &= Reflection.HasMethod( type, TurretNetworkManagerBroadcastTargetIdMethod );
+				result &= Reflection.HasMethod( type, TurretNetworkManagerBroadcastRangeMethod );
+				result &= Reflection.HasMethod( type, TurretNetworkManagerBroadcastTargettingFlagsMethod );
 
 				return result;
 			}

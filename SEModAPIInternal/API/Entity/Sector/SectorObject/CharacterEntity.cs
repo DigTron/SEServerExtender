@@ -1,3 +1,5 @@
+using VRage.Game;
+
 namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 {
 	using System;
@@ -5,13 +7,18 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 	using System.IO;
 	using System.Reflection;
 	using System.Runtime.Serialization;
-	using Microsoft.Xml.Serialization.GeneratedAssembly;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
 	using Sandbox.Common.ObjectBuilders.Definitions;
+	using Sandbox.Game.Components;
+	using Sandbox.Game.Entities.Character;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Common;
 	using SEModAPIInternal.Support;
+	using VRage.ObjectBuilders;
+	using VRage.Utils;
 
-	[DataContract( Name = "CharacterEntityProxy" )]
+	[DataContract]
 	public class CharacterEntity : BaseEntity
 	{
 		#region "Attributes"
@@ -23,18 +30,15 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 		public static string CharacterNamespace = "Sandbox.Game.Entities.Character";
 		public static string CharacterClass = "MyCharacter";
 
-		public static string CharacterGetHealthMethod = "get_Health";
+		public static string CharacterStatCompProperty = "StatComp";
 
 		//		public static string CharacterDamageCharacterMethod = "DoDamage"; //
 		public static string CharacterDamageCharacterMethod = "DoDamage";
 
-		public static string CharacterSetHealthMethod = "AddHealth";
 		public static string CharacterGetBatteryMethod = "get_SuitBattery";
 		public static string CharacterGetInventoryMethod = "GetInventory";
 		public static string CharacterGetDisplayNameMethod = "get_DisplayName";
 		public static string CharacterGetNetworkManagerMethod = "get_SyncObject";
-
-		public static string CharacterItemListField = "m_inventoryResults";
 
 		///////////////////////////////////////////////////////////
 
@@ -52,7 +56,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 		public CharacterEntity( FileInfo characterFile )
 			: base( null )
 		{
-			MyObjectBuilder_Character character = BaseObjectManager.LoadContentFile<MyObjectBuilder_Character, MyObjectBuilder_CharacterSerializer>( characterFile );
+			MyObjectBuilder_Character character = BaseObjectManager.LoadContentFile<MyObjectBuilder_Character>( characterFile );
 			ObjectBuilder = character;
 
 			m_inventory = new InventoryEntity( character.Inventory );
@@ -184,8 +188,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalUpdateBatteryLevel;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalUpdateBatteryLevel );
 				}
 			}
 		}
@@ -208,8 +211,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 
 				if ( BackingObject != null )
 				{
-					Action action = InternalDamageCharacter;
-					SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+					MySandboxGame.Static.Invoke( InternalDamageCharacter );
 				}
 
 				ObjectBuilder.Health = value;
@@ -293,26 +295,23 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 				if ( type == null )
 					throw new Exception( "Could not find internal type for CharacterEntity" );
 				bool result = true;
-				result &= HasMethod( type, CharacterGetHealthMethod );
-				result &= HasMethod( type, CharacterDamageCharacterMethod );
-				result &= HasMethod( type, CharacterSetHealthMethod );
-				result &= HasMethod( type, CharacterGetBatteryMethod );
-				result &= HasMethod( type, CharacterGetInventoryMethod );
-				result &= HasMethod( type, CharacterGetDisplayNameMethod );
-				result &= HasMethod( type, CharacterGetNetworkManagerMethod );
-				result &= HasField( type, CharacterItemListField );
+				result &= Reflection.HasMethod( type, CharacterDamageCharacterMethod );
+				result &= Reflection.HasMethod( type, CharacterGetBatteryMethod );
+				result &= Reflection.HasMethod( type, CharacterGetInventoryMethod );
+				result &= Reflection.HasMethod( type, CharacterGetDisplayNameMethod );
+				result &= Reflection.HasMethod( type, CharacterGetNetworkManagerMethod );
 
 				Type type2 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( CharacterBatteryNamespace, CharacterBatteryClass );
 				if ( type2 == null )
 					throw new Exception( "Could not find battery type for CharacterEntity" );
-				result &= HasMethod( type2, CharacterBatterySetBatteryCapacityMethod );
-				result &= HasField( type2, CharacterBatteryCapacityField );
+				result &= Reflection.HasMethod( type2, CharacterBatterySetBatteryCapacityMethod );
+				result &= Reflection.HasField( type2, CharacterBatteryCapacityField );
 
 				return result;
 			}
 			catch ( Exception ex )
 			{
-				ApplicationLog.BaseLog.Error( ex );
+				//ApplicationLog.BaseLog.Error( ex );
 				return false;
 			}
 		}
@@ -335,7 +334,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 
 		public override void Export( FileInfo fileInfo )
 		{
-			BaseObjectManager.SaveContentFile<MyObjectBuilder_Character, MyObjectBuilder_CharacterSerializer>( ObjectBuilder, fileInfo );
+			MyObjectBuilderSerializer.SerializeXML( fileInfo.FullName, false, ObjectBuilder );
 		}
 
 		#region "Internal"
@@ -365,9 +364,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 		{
 			try
 			{
-				float health = (float)InvokeEntityMethod( BackingObject, CharacterGetHealthMethod, new object[ ] { } );
-
-				return health;
+				return ( (MyCharacter) BackingObject ).StatComp.Health.Value;
 			}
 			catch ( Exception ex )
 			{
@@ -381,10 +378,38 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 			try
 			{
 				float damage = InternalGetCharacterHealth( ) - Health;
-				MyDamageType damageType = MyDamageType.Unknown;
 				if ( Health <= 0 )
-					damageType = MyDamageType.Suicide;
-				InvokeEntityMethod( BackingObject, CharacterDamageCharacterMethod, new object[ ] { damage, damageType, true } );
+					InvokeEntityMethod( BackingObject, CharacterDamageCharacterMethod, new object[ ] { damage, MyDamageType.Suicide, true } );
+				else
+				{
+					InvokeEntityMethod( BackingObject, CharacterDamageCharacterMethod, new object[ ] { damage, MyDamageType.Unknown, true } );
+				}
+			}
+			catch ( Exception ex )
+			{
+				ApplicationLog.BaseLog.Error( ex );
+			}
+		}
+
+		protected void InternalDamageCharacter( MyStringHash damageType )
+		{
+			try
+			{
+				float damage = InternalGetCharacterHealth( ) - Health;
+				InvokeEntityMethod( BackingObject, CharacterDamageCharacterMethod, new object[ ] { damage, damageType, true, 0 } );
+			}
+			catch ( Exception ex )
+			{
+				ApplicationLog.BaseLog.Error( ex );
+			}
+		}
+
+		protected void InternalDamageCharacter( MyStringHash damageType, long attackerId )
+		{
+			try
+			{
+				float damage = InternalGetCharacterHealth( ) - Health;
+				InvokeEntityMethod( BackingObject, CharacterDamageCharacterMethod, new object[ ] { damage, damageType, true, attackerId } );
 			}
 			catch ( Exception ex )
 			{
@@ -472,8 +497,7 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 			m_parent = parent;
 			m_backingObject = backingObject;
 
-			Action action = RegisterPacketHandlers;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( RegisterPacketHandlers );
 		}
 
 		#endregion "Constructors and Initializers"
@@ -506,7 +530,6 @@ namespace SEModAPIInternal.API.Entity.Sector.SectorObject
 				if ( type == null )
 					throw new Exception( "Could not find internal type for CharacterEntityNetworkManager" );
 				bool result = true;
-				//result &= BaseObject.HasMethod(type, CharacterGetHealthMethod);
 
 				return result;
 			}

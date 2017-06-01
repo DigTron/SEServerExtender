@@ -1,30 +1,44 @@
+using System.Reflection;
+using System.Text;
+using SteamSDK;
+using VRage;
+using VRage.Game;
+using VRage.Plugins;
+
 namespace SEModAPIExtensions.API
 {
-	using System;
-	using System.Collections.Generic;
-	using System.Diagnostics;
-	using System.IO;
-	using System.Linq;
-	using System.Runtime.ExceptionServices;
-	using System.Runtime.Serialization;
-	using System.Security;
-	using System.ServiceModel;
-	using System.Threading;
-	using System.Windows.Forms;
-	using NLog;
-	using NLog.Targets;
-	using Sandbox.Common.ObjectBuilders;
-	using SEModAPI.API;
-	using SEModAPI.API.Definitions;
-	using SEModAPIInternal.API.Chat;
-	using SEModAPIInternal.API.Common;
-	using SEModAPIInternal.API.Server;
-	using SEModAPIInternal.Support;
-	using Timer = System.Timers.Timer;
+    using System;
+    using System.Collections.Generic;
+    using System.Diagnostics;
+    using System.IO;
+    using System.Linq;
+    using System.Runtime.CompilerServices;
+    using System.Runtime.ExceptionServices;
+    using System.Runtime.Serialization;
+    using System.Security;
+    using System.ServiceModel;
+    using System.Threading;
+    using System.Windows.Forms;
+    using NLog;
+    using NLog.Targets;
+    using Sandbox;
+    using Sandbox.Common.ObjectBuilders;
+    using SEModAPI.API;
+    using SEModAPI.API.Definitions;
+    using SEModAPI.API.Sandbox;
+    using SEModAPI.API.Utility;
+    using SEModAPIInternal.API.Chat;
+    using SEModAPIInternal.API.Common;
+    using SEModAPIInternal.API.Server;
+    using SEModAPIInternal.Support;
+    using VRage.ObjectBuilders;
+    using Timer = System.Timers.Timer;
 
-	[DataContract]
+    [DataContract]
 	public class Server
-	{
+    {
+        public static bool DisableProfiler;
+        public static bool IsStable;
 		private static Server _instance;
 		private static bool _isInitialized;
 		private static Thread _runServerThread;
@@ -42,8 +56,7 @@ namespace SEModAPIExtensions.API
 
 		//Managers
 		private PluginManager _pluginManager;
-		private SandboxGameAssemblyWrapper _gameAssemblyWrapper;
-		private FactionsManager _factionsManager;
+		//private FactionsManager _factionsManager;
 		private DedicatedServerAssemblyWrapper _dedicatedServerWrapper;
 		private LogManager _logManager;
 		private EntityEventManager _entityEventManager;
@@ -188,8 +201,7 @@ namespace SEModAPIExtensions.API
 		{
 			_dedicatedServerWrapper = DedicatedServerAssemblyWrapper.Instance;
 			_pluginManager = PluginManager.Instance;
-			_gameAssemblyWrapper = SandboxGameAssemblyWrapper.Instance;
-			_factionsManager = FactionsManager.Instance;
+			//_factionsManager = FactionsManager.Instance;
 			_entityEventManager = EntityEventManager.Instance;
 			_chatManager = ChatManager.Instance;
 			_sessionManager = SessionManager.Instance;
@@ -216,7 +228,7 @@ namespace SEModAPIExtensions.API
 				if ( _commandLineArgs.Debug )
 				{
 					ApplicationLog.BaseLog.Info( "Debugging enabled" );
-					SandboxGameAssemblyWrapper.IsDebugging = true;
+					ExtenderOptions.IsDebugging = true;
 				}
 				if ( _commandLineArgs.NoWcf )
 				{
@@ -246,6 +258,10 @@ namespace SEModAPIExtensions.API
 				{
 					ApplicationLog.BaseLog.Info( "World Request Replace: Enabled" );
 				}
+                if (_commandLineArgs.ConsoleTitle.Length != 0 )
+                {
+                    ApplicationLog.BaseLog.Info("Console title set to '" + _commandLineArgs.ConsoleTitle + "'");
+                }
                 ApplicationLog.BaseLog.Info("end parsing");
 			}
 			catch ( Exception ex )
@@ -360,10 +376,10 @@ namespace SEModAPIExtensions.API
 				{
 					if ( InstanceName.Length != 0 )
 					{
-						SandboxGameAssemblyWrapper.UseCommonProgramData = true;
-						SandboxGameAssemblyWrapper.Instance.InitMyFileSystem( InstanceName, false );
+						ExtenderOptions.UseCommonProgramData = true;
+						FileSystem.InitMyFileSystem( InstanceName, false );
 					}
-					path = _gameAssemblyWrapper.GetUserDataPath( InstanceName );
+					path = FileSystem.GetUserDataPath( InstanceName );
 				}
 
 				return path;
@@ -371,7 +387,18 @@ namespace SEModAPIExtensions.API
 			set { _commandLineArgs.InstancePath = value; }
 		}
 
-		[IgnoreDataMember]
+        [IgnoreDataMember]
+        public string Title
+        {
+            get
+            {
+                string title = _commandLineArgs.ConsoleTitle;
+                return title;
+            }
+            set { _commandLineArgs.ConsoleTitle = value; }
+        }
+
+        [IgnoreDataMember]
 		public Thread ServerThread
 		{
 			get { return _runServerThread; }
@@ -420,7 +447,7 @@ namespace SEModAPIExtensions.API
 
 			if ( !_pluginManager.Initialized && !_pluginManager.Loaded )
 			{
-				if ( SandboxGameAssemblyWrapper.Instance.IsGameStarted )
+				if ( MySandboxGameWrapper.IsGameStarted )
 				{
 					if ( CommandLineArgs.WorldRequestReplace )
 						ServerNetworkManager.Instance.ReplaceWorldJoin( );
@@ -434,10 +461,12 @@ namespace SEModAPIExtensions.API
 					//SandboxGameAssemblyWrapper.InitAPIGateway();
 					_pluginManager.LoadPlugins( );
 					_pluginManager.Init( );
+                    ServerNetworkManager.Instance.InitNetworkIntercept();
+                    //SandboxGameAssemblyWrapper.Instance.GameAction( ( ) => AppDomain.CurrentDomain.ClearEventInvocations( "_unhandledException" ) );
 
-					//SandboxGameAssemblyWrapper.Instance.GameAction( ( ) => AppDomain.CurrentDomain.ClearEventInvocations( "_unhandledException" ) );
+				    SteamServerAPI.Instance.GameServer.SetKeyValue("SM", "SE Server Extender");
 
-					AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+                    AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 					//AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 					Application.ThreadException += Application_ThreadException;
 					Application.SetUnhandledExceptionMode( UnhandledExceptionMode.CatchException );
@@ -457,7 +486,7 @@ namespace SEModAPIExtensions.API
 		[SecurityCritical]
 		static void Application_ThreadException( object sender, ThreadExceptionEventArgs e )
 		{
-			ApplicationLog.BaseLog.Fatal( "Application.ThreadException - {0}", e.Exception );
+			ApplicationLog.BaseLog.Fatal( e.Exception,"Application.ThreadException - {0}", e.Exception );
 		}
 
 		[HandleProcessCorruptedStateExceptions]
@@ -490,10 +519,11 @@ namespace SEModAPIExtensions.API
 
 			try
 			{
-				SandboxGameAssemblyWrapper.InstanceName = InstanceName;
+				ExtenderOptions.InstanceName = InstanceName;
 				_dedicatedServerWrapper = DedicatedServerAssemblyWrapper.Instance;
-				bool result = _dedicatedServerWrapper.StartServer( _commandLineArgs.InstanceName, _commandLineArgs.InstancePath, !_commandLineArgs.NoConsole );
-				ApplicationLog.BaseLog.Info( "Server has stopped running" );
+                bool result = _dedicatedServerWrapper.StartServer( _commandLineArgs.InstanceName, _commandLineArgs.InstancePath, !_commandLineArgs.NoConsole );
+                
+                ApplicationLog.BaseLog.Info( "Server has stopped running" );
 
 				_isServerRunning = false;
 
@@ -560,71 +590,161 @@ namespace SEModAPIExtensions.API
 				if ( _isServerRunning )
 					return;
 
-				if ( _dedicatedConfigDefinition == null )
+			    if (DisableProfiler)
+			    {
+			        KillProfiler();
+			    }
+			    else
+			    {
+                    //profiler injection is timing critical
+                    //create a fake plugin to trick the game into calling our injection init
+                    //at MyPlugins.Init
+			        var pluginslist = (List<IPlugin>)typeof(MyPlugins).GetField("m_plugins", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
+			        pluginslist.Add(new ProfilerFakePlugin());
+			    }
+
+			    if ( _dedicatedConfigDefinition == null )
 					LoadServerConfig( );
 
-				if ( Config.AutoSave )
-				{
-					Config.AutoSave = false;
-					SaveServerConfig( );
-				}
+			    if (Config == null)
+			    {
+                    ApplicationLog.BaseLog.Error("NULL CONFIG!");
+			    }
+			    else
+			    {
+			        if (Config.AutoSaveInMinutes > 0)
+			        {
+			            Config.AutoSaveInMinutes = 0;
+			            SaveServerConfig();
+			        }
+			    }
 
-				_sessionManager.UpdateSessionSettings( );
+			    _sessionManager.UpdateSessionSettings( );
 				_pluginMainLoop.Start( );
-				_autosaveTimer.Start( );
+                _autosaveTimer.Start( );
 
-				_isServerRunning = true;
+                _isServerRunning = true;
 				_serverRan = true;
-
+                
 				_runServerThread = new Thread( RunServer ) { IsBackground = true };
-				_runServerThread.Start( );
+                _runServerThread.Start( );
 			}
 			catch ( Exception ex )
 			{
 				ApplicationLog.BaseLog.Error( ex );
 				_isServerRunning = false;
 			}
-		}
+        }
 
+        private void KillProfiler()
+        {
+            var keenStart = typeof(MySimpleProfiler).GetMethod("Begin");
+            var keenEnd = typeof(MySimpleProfiler).GetMethod("End");
+            var ourStart = typeof(Server).GetMethod("Begin");
+            var ourEnd = typeof(Server).GetMethod("End");
+
+            MethodUtil.ReplaceMethod(ourStart, keenStart);
+            MethodUtil.ReplaceMethod(ourEnd, keenEnd);
+        }
+
+        public static void Begin(string key)
+        { }
+
+        public static void End(string Key)
+        { }
+        
 		public void StopServer( )
 		{
+		    if (!_isServerRunning)
+		        return; 
+
 			ApplicationLog.BaseLog.Info( "Stopping server" );
-			SandboxGameAssemblyWrapper.Instance.ExitGame( );
+            
+            //cache for console output while we're waiting
+		    StringBuilder sb = new StringBuilder();
+            TextWriter tw = new StringWriter(sb);
+		    TextWriter tmp = Console.Out;
+
+            //hijack the console so we can listen for the server stopped message
+            Console.SetOut(tw);
+
+            //ask the server nicely to stop
+			MySandboxGame.ExitThreadSafe();
 
 			_pluginMainLoop.Stop( );
 			_autosaveTimer.Stop( );
 			_pluginManager.Shutdown( );
 
+            DateTime waitStart = DateTime.Now;
+
+		    while (true)
+		    {
+                if (sb.ToString().Contains("Server stopped, press any key to close this window"))
+		            break;
+		        
+                Thread.Sleep(100);
+
+                //the server didn't listen, so kill it forcefully
+		        if (DateTime.Now - waitStart > TimeSpan.FromMinutes(5))
+		        {
+                    ApplicationLog.BaseLog.Warn("Server failed to shut down correctly!");
+		            break;
+		        }
+		    }
+
+            //return control back to the console and write the cached log back
+            Console.SetOut(tmp);
+            Console.Write(sb);
+            
 			//_runServerThread.Interrupt();
 			//_dedicatedServerWrapper.StopServer();
 			//_runServerThread.Abort();
-			_runServerThread.Interrupt( );
+			//_runServerThread.Interrupt( );
 
 			_isServerRunning = false;
 
 			ApplicationLog.BaseLog.Info(  "Server has been stopped" );
 		}
 
+        public static bool registerResult = false;
+        public static bool serializerResult = false;
+        public static bool registered = false;
 		public MyConfigDedicatedData<MyObjectBuilder_SessionSettings> LoadServerConfig( )
-		{
-			if ( File.Exists( System.IO.Path.Combine(Path,"SpaceEngineers-Dedicated.cfg.restart") ) )
+        {
+            /*
+            if ( !registered )
+            {
+                registered = true;
+                MyObjectBuilderType.RegisterAssemblies( );
+            }*/
+
+            if ( File.Exists( System.IO.Path.Combine(Path,"SpaceEngineers-Dedicated.cfg.restart") ) )
 			{
 				File.Copy( System.IO.Path.Combine( Path, "SpaceEngineers-Dedicated.cfg.restart" ), System.IO.Path.Combine( Path, "SpaceEngineers-Dedicated.cfg" ), true );
 				File.Delete( System.IO.Path.Combine( Path, "SpaceEngineers-Dedicated.cfg.restart" ) );
 			}
 
-			if ( File.Exists( System.IO.Path.Combine( Path,"SpaceEngineers-Dedicated.cfg" ) ) )
-			{
-				MyConfigDedicatedData<MyObjectBuilder_SessionSettings> config = DedicatedConfigDefinition.Load( new FileInfo( System.IO.Path.Combine( Path, "SpaceEngineers-Dedicated.cfg" ) ) );
-				_dedicatedConfigDefinition = new DedicatedConfigDefinition( config );
-				_cfgWatch = new FileSystemWatcher( Path, "*.cfg" );
-				_cfgWatch.Changed += Config_Changed;
-				_cfgWatch.NotifyFilter = NotifyFilters.Size;
-				_cfgWatch.EnableRaisingEvents = true;
-				return config;
-			}
-			else
-				return null;
+            if ( File.Exists( System.IO.Path.Combine( Path, "SpaceEngineers-Dedicated.cfg" ) ) )
+            {
+                MyConfigDedicatedData<MyObjectBuilder_SessionSettings> config = DedicatedConfigDefinition.Load( new FileInfo( System.IO.Path.Combine( Path, "SpaceEngineers-Dedicated.cfg" ) ) );
+                if(config==null)
+                    throw new FileLoadException("Failed to load session settings: " + Path);
+                _dedicatedConfigDefinition = new DedicatedConfigDefinition( config );
+                _cfgWatch = new FileSystemWatcher( Path, "*.cfg" );
+                _cfgWatch.Changed += Config_Changed;
+                _cfgWatch.NotifyFilter = NotifyFilters.Size;
+                _cfgWatch.EnableRaisingEvents = true;
+                return config;
+            }
+            else
+            {
+                //if ( ExtenderOptions.IsDebugging )
+                //{
+                    ApplicationLog.BaseLog.Info( "Failed to load session settings" );
+                    ApplicationLog.BaseLog.Info( Path );
+                //}
+                return null;
+            }
 
 
 			/*
@@ -703,6 +823,23 @@ namespace SEModAPIExtensions.API
 				_dedicatedConfigDefinition.Save( fileInfo );
 		}
 
-		#endregion
-	}
+#endregion
+
+        class ProfilerFakePlugin : IPlugin
+        {
+            public void Dispose()
+            {
+            }
+
+            public void Init(object gameInstance)
+            {
+                ApplicationLog.BaseLog.Info("Initializing profiler injector");
+                ProfilerInjection.Init();
+            }
+
+            public void Update()
+            {
+            }
+        }
+    }
 }

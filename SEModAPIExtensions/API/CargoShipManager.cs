@@ -1,3 +1,5 @@
+using VRage.Game;
+
 namespace SEModAPIExtensions.API
 {
 	using System;
@@ -44,14 +46,14 @@ namespace SEModAPIExtensions.API
 			{
 				double farthestAsteroidDistance = 0;
 				double nearestAsteroidDistance = double.MaxValue;
-				foreach ( VoxelMap voxelMap in SectorObjectManager.Instance.GetTypedInternalData<VoxelMap>( ) )
+				/*foreach ( VoxelMap voxelMap in SectorObjectManager.Instance.GetTypedInternalData<VoxelMap>( ) )
 				{
 					Vector3D asteroidPositon = voxelMap.Position;
 					if ( asteroidPositon.Length( ) > farthestAsteroidDistance )
 						farthestAsteroidDistance = asteroidPositon.Length( );
 					if ( asteroidPositon.Length( ) < nearestAsteroidDistance )
 						nearestAsteroidDistance = asteroidPositon.Length( );
-				}
+				}*/
 
 				spawnSize = farthestAsteroidDistance * 2d + 10000d;
 				destinationSize = nearestAsteroidDistance * 2d + 2000d;
@@ -121,7 +123,7 @@ namespace SEModAPIExtensions.API
 						Vector3 shipVelocity = travelVector * Math.Min( cubeGrid.MaxLinearVelocity, Math.Max( 1.0f, entry.Speed ) );
 						cubeGrid.LinearVelocity = shipVelocity;
 
-						cubeGrid.IsDampenersEnabled = false;
+						//cubeGrid.IsDampenersEnabled = false;
 
 						foreach ( MyObjectBuilder_CubeBlock cubeBlock in cubeGrid.BaseCubeBlocks )
 						{

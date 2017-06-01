@@ -1,9 +1,18 @@
-﻿namespace SEModAPIInternal.API.Common
+﻿using Sandbox.Game.Screens.Helpers;
+using Sandbox.ModAPI;
+using SEModAPIInternal.API.Chat;
+using VRage.Game;
+
+namespace SEModAPIInternal.API.Common
 {
 	using System;
 	using System.Threading;
 	using System.Threading.Tasks;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
+	using Sandbox.Game.Multiplayer;
+	using Sandbox.Game.World;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Entity;
 	using SEModAPIInternal.Support;
 	using VRage;
@@ -15,44 +24,44 @@
 		private static WorldManager m_instance;
 		private bool m_isSaving = false;
 
-		public static string WorldManagerNamespace = "Sandbox.Game.World";
-		public static string WorldManagerClass = "MySession";
+		public const string WorldManagerNamespace = "Sandbox.Game.World";
+		public const string WorldManagerClass = "MySession";
 
-		public static string WorldManagerGetPlayerManagerMethod = "get_SyncLayer";
-		public static string WorldManagerSaveWorldMethod = "Save";
-		public static string WorldManagerGetCheckpointMethod = "GetCheckpoint";
-		public static string WorldManagerGetSectorMethod = "GetSector";
-		public static string WorldManagerGetSessionNameMethod = "get_Name";
+		public const string WorldManagerGetPlayerManagerMethod = "get_SyncLayer";
+		public const string WorldManagerSaveWorldMethod = "Save";
+		public const string WorldManagerGetCheckpointMethod = "GetCheckpoint";
+		public const string WorldManagerGetSectorMethod = "GetSector";
+		public const string WorldManagerGetSessionNameMethod = "get_Name";
 
-		public static string WorldManagerInstanceField = "<Static>k__BackingField";
-		public static string WorldManagerFactionManagerField = "Factions";
-		public static string WorldManagerSessionSettingsField = "Settings";
+		public const string WorldManagerInstanceField = "<Static>k__BackingField";
+		//public const string WorldManagerFactionManagerField = "Factions";
+		public const string WorldManagerSessionSettingsField = "Settings";
 
-		public static string WorldManagerSaveSnapshot = "Save";
+		public const string WorldManagerSaveSnapshot = "Save";
 
-		public static string WorldSnapshotNamespace = "Sandbox.Game.Screens.Helpers";
-		public static string WorldSnapshotStaticClass = "MyAsyncSaving";
-		public static string WorldSnapshotSaveMethod = "Start";
+		public const string WorldSnapshotNamespace = "Sandbox.Game.Screens.Helpers";
+		public const string WorldSnapshotStaticClass = "MyAsyncSaving";
+		public const string WorldSnapshotSaveMethod = "Start";
 
 		////////////////////////////////////////////////////////////////////
 
-		public static string WorldResourceManagerNamespace = "Sandbox.Game.World";
-		public static string WorldResourceManagerClass = "MySessionSnapshot";
+		public const string WorldResourceManagerNamespace = "Sandbox.Game.World";
+		public const string WorldResourceManagerClass = "MySessionSnapshot";
 
-		public static string WorldResourceManagerResourceLockField = "m_savingLock";
+		public const string WorldResourceManagerResourceLockField = "m_savingLock";
 
 		///////////////////////////////////////////////////////////////////
 
-		public static string SandboxGameNamespace = "Sandbox.Game";
-		public static string SandboxGameGameStatsClass = "MyGameStats";
-		public static string SandboxGameGetGameStatsInstance = "get_Static";
-		public static string SandboxGameGetUpdatesPerSecondField = "<UpdatesPerSecond>k__BackingField";
+		public const string SandboxGameNamespace = "Sandbox.Game";
+		public const string SandboxGameGameStatsClass = "MyGameStats";
+		public const string SandboxGameGetGameStatsInstance = "get_Static";
+		public const string SandboxGameGetUpdatesPerSecondField = "<UpdatesPerSecond>k__BackingField";
 
 		//////////////////////////////////////////////////////////////////
 
-		public static string RespawnManager = "Sandbox.Game.World.MyRespawnComponent";
-		public static string RespawnManagerDictionary = "m_globalRespawnTimesMs";
-		public static string RespawnManagerList = "m_tmpRespawnTimes";
+		public const string RespawnManager = "Sandbox.Game.World.MyRespawnComponent";
+		public const string RespawnManagerDictionary = "m_globalRespawnTimesMs";
+		public const string RespawnManagerList = "m_tmpRespawnTimes";
 
 		#endregion "Attributes"
 
@@ -175,33 +184,33 @@
 				if ( type1 == null )
 					throw new Exception( "Could not find internal type for WorldManager" );
 				bool result = true;
-				result &= BaseObject.HasMethod( type1, WorldManagerGetPlayerManagerMethod );
+				result &= Reflection.HasMethod( type1, WorldManagerGetPlayerManagerMethod );
 				Type[ ] argTypes = new Type[ 1 ];
 				argTypes[ 0 ] = typeof( string );
-				result &= BaseObject.HasMethod( type1, WorldManagerSaveWorldMethod, argTypes );
-				result &= BaseObject.HasMethod( type1, WorldManagerGetCheckpointMethod );
-				result &= BaseObject.HasMethod( type1, WorldManagerGetSectorMethod );
-				result &= BaseObject.HasMethod( type1, WorldManagerGetSessionNameMethod );
-				result &= BaseObject.HasField( type1, WorldManagerInstanceField );
-				result &= BaseObject.HasField( type1, WorldManagerFactionManagerField );
-				result &= BaseObject.HasField( type1, WorldManagerSessionSettingsField );
+				result &= Reflection.HasMethod( type1, WorldManagerSaveWorldMethod, argTypes );
+				result &= Reflection.HasMethod( type1, WorldManagerGetCheckpointMethod );
+				result &= Reflection.HasMethod( type1, WorldManagerGetSectorMethod );
+				result &= Reflection.HasMethod( type1, WorldManagerGetSessionNameMethod );
+				result &= Reflection.HasField( type1, WorldManagerInstanceField );
+				//result &= Reflection.HasField( type1, WorldManagerFactionManagerField );
+				result &= Reflection.HasField( type1, WorldManagerSessionSettingsField );
 
 				Type type2 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( WorldResourceManagerNamespace, WorldResourceManagerClass );
 				if ( type2 == null )
 					throw new Exception( "Could not find world resource manager type for WorldManager" );
-				result &= BaseObject.HasField( type2, WorldResourceManagerResourceLockField );
+				result &= Reflection.HasField( type2, WorldResourceManagerResourceLockField );
 
 				Type type3 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( WorldSnapshotNamespace, WorldSnapshotStaticClass );
 				if ( type3 == null )
 					throw new Exception( "Could not find world snapshot type for WorldManager" );
-				result &= BaseObject.HasMethod( type3, WorldSnapshotSaveMethod );
+				result &= Reflection.HasMethod( type3, WorldSnapshotSaveMethod );
 
 				Type type4 = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( SandboxGameNamespace, SandboxGameGameStatsClass );
 				if ( type4 == null )
 					throw new Exception( "Count not find type for SandboxGameStats" );
 
-				result &= BaseObject.HasMethod( type4, SandboxGameGetGameStatsInstance );
-				result &= BaseObject.HasField( type4, SandboxGameGetUpdatesPerSecondField );
+				result &= Reflection.HasMethod( type4, SandboxGameGetGameStatsInstance );
+				result &= Reflection.HasField( type4, SandboxGameGetUpdatesPerSecondField );
 
 				return result;
 			}
@@ -244,74 +253,78 @@
 				return;
 
 			m_isSaving = true;
-			Action action = InternalSaveWorld;
-			SandboxGameAssemblyWrapper.Instance.EnqueueMainGameAction( action );
+			MySandboxGame.Static.Invoke( InternalSaveWorld );
 		}
 
 		public void AsynchronousSaveWorld( )
 		{
-			if ( m_isSaving )
-				return;
+		    if ( m_isSaving )
+		    {
+                ApplicationLog.BaseLog.Error( "Tried to initiate a save while another is already in progress!" );
+                return;
+		    }
 
 			m_isSaving = true;
 
 			try
 			{
+			    ApplicationLog.BaseLog.Info("Asynchronous save started");
 				DateTime saveStartTime = DateTime.Now;
+			    Task.Run(() =>
+			             {
+			                 SandboxGameAssemblyWrapper.Instance.GameAction(() =>
+			                                                                {
+			                                                                    MyAsyncSaving.Start(() =>
+			                                                                                        {
+			                                                                                            MySector.ResetEyeAdaptation = true;
+			                                                                                            ApplicationLog.BaseLog.Info("Asynchronous Save Setup Started: {0}ms",
+			                                                                                                                        (DateTime.Now - saveStartTime)
+			                                                                                                                            .TotalMilliseconds);
+			                                                                                        });
+			                                                                });
 
-				Task.Factory.StartNew( ( ) =>
-				                       {
-					                       SandboxGameAssemblyWrapper.Instance.GameAction( ( ) =>
-					                                                                       {
-						                                                                       Type type = SandboxGameAssemblyWrapper.Instance.GetAssemblyType( WorldSnapshotNamespace, WorldSnapshotStaticClass );
-						                                                                       BaseObject.InvokeStaticMethod( type,
-						                                                                                                      WorldSnapshotSaveMethod,
-						                                                                                                      new object[ ]
-						                                                                                                      {
-							                                                                                                      new Action( ( ) =>
-							                                                                                                                  {
-								                                                                                                                  ApplicationLog.BaseLog.Info( "Asynchronous Save Setup Started: {0}ms",
-								                                                                                                                                               ( DateTime.Now - saveStartTime )
-									                                                                                                                                               .TotalMilliseconds );
-							                                                                                                                  } ),
-							                                                                                                      null
-						                                                                                                      } );
-					                                                                       } );
+			                 // Autosave can fail to complete sometimes; alert the admin when this happens
+			                 DateTime start = DateTime.Now;
+			                 FastResourceLock saveLock = InternalGetResourceLock();
+			                 while (!saveLock.Owned)
+			                 {
+			                     if (DateTime.Now - start > TimeSpan.FromMilliseconds(20000))
+			                     {
+			                         ApplicationLog.BaseLog.Warn("Autosave failed to start!");
+			                         return;
+			                     }
 
-					                       // Ugly -- Get rid of this?
-					                       DateTime start = DateTime.Now;
-					                       FastResourceLock saveLock = InternalGetResourceLock( );
-					                       while ( !saveLock.Owned )
-					                       {
-						                       if ( DateTime.Now - start > TimeSpan.FromMilliseconds( 20000 ) )
-							                       return;
+			                     Thread.Sleep(1);
+			                 }
 
-						                       Thread.Sleep( 1 );
-					                       }
+			                 while (saveLock.Owned)
+			                 {
+			                     if (DateTime.Now - start > TimeSpan.FromMilliseconds(120000))
+			                     {
+			                         ApplicationLog.BaseLog.Warn("Autosave has ran for 120 seconds--something is wrong! The save will most likely not complete!");
+			                         MyAPIGateway.Utilities.SendMessage("Warning: SESE Autosave failed! Alert the server admin!");
+			                         return;
+			                     }
 
-					                       while ( saveLock.Owned )
-					                       {
-						                       if ( DateTime.Now - start > TimeSpan.FromMilliseconds( 60000 ) )
-							                       return;
+			                     Thread.Sleep(1);
+			                 }
 
-						                       Thread.Sleep( 1 );
-					                       }
-
-					                       ApplicationLog.BaseLog.Info( "Asynchronous Save Completed: {0}ms", ( DateTime.Now - saveStartTime ).TotalMilliseconds );
-					                       OnWorldSaved( );
-					                       EntityEventManager.EntityEvent newEvent = new EntityEventManager.EntityEvent
-					                                                                 {
-						                                                                 type = EntityEventManager.EntityEventType.OnSectorSaved,
-						                                                                 timestamp = DateTime.Now,
-						                                                                 entity = null,
-						                                                                 priority = 0
-					                                                                 };
-					                       EntityEventManager.Instance.AddEvent( newEvent );
-				                       } );
+			                 ApplicationLog.BaseLog.Info($"Asynchronous Save Completed: {(DateTime.Now - saveStartTime).TotalMilliseconds}ms");
+			                 OnWorldSaved();
+			                 EntityEventManager.EntityEvent newEvent = new EntityEventManager.EntityEvent
+			                                                           {
+			                                                               type = EntityEventManager.EntityEventType.OnSectorSaved,
+			                                                               timestamp = DateTime.Now,
+			                                                               entity = null,
+			                                                               priority = 0
+			                                                           };
+			                 EntityEventManager.Instance.AddEvent(newEvent);
+			             });
 
 			}
 			catch ( Exception ex )
 			{
+                ApplicationLog.BaseLog.Error( ex, "Exception in asynchronous save." );
 			}
 			finally
 			{
@@ -403,13 +416,12 @@
 
 		// Internals //
 
-		internal Object InternalGetFactionManager( )
+            /*
+		internal MyFactionCollection InternalGetFactionManager( )
 		{
 			try
 			{
-				Object worldManager = BaseObject.GetEntityFieldValue( BackingObject, WorldManagerFactionManagerField );
-
-				return worldManager;
+				return MySession.Static.Factions;
 			}
 			catch ( Exception ex )
 			{
@@ -417,7 +429,7 @@
 				return null;
 			}
 		}
-
+        */
 		internal Object InternalGetPlayerManager( )
 		{
 			Object playerManager = BaseObject.InvokeEntityMethod( BackingObject, WorldManagerGetPlayerManagerMethod );

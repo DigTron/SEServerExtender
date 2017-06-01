@@ -1,9 +1,13 @@
+using Sandbox.Game;
+using SEModAPIInternal.API.Common;
+using VRage.Game;
+using VRage.Game.Entity;
+
 namespace SEServerExtender
 {
 	using System;
 	using System.Collections.Generic;
 	using System.Windows.Forms;
-	using Sandbox.Common.ObjectBuilders;
 	using Sandbox.Definitions;
 	using SEModAPIInternal.API.Entity;
 	using SEModAPIInternal.Support;
@@ -71,7 +75,7 @@ namespace SEServerExtender
 
 		#region "Properties"
 
-		public InventoryEntity InventoryContainer { get; set; }
+		public MyInventory InventoryContainer { get; set; }
 
 		public MyDefinitionId SelectedType
 		{
@@ -109,13 +113,22 @@ namespace SEServerExtender
 
 			try
 			{
-                MyObjectBuilder_InventoryItem objectBuilder = MyObjectBuilderSerializer.CreateNewObject<MyObjectBuilder_InventoryItem>();
-                objectBuilder.Content = MyObjectBuilderSerializer.CreateNewObject(SelectedType.TypeId, SelectedType.SubtypeId.ToString());
-				objectBuilder.Amount = (MyFixedPoint)Amount;
-				InventoryItemEntity newItem = new InventoryItemEntity(objectBuilder);
+			    SandboxGameAssemblyWrapper.Instance.GameAction(() =>
+			    {
+			        var amount = (MyFixedPoint) Amount;
+			        var content =
+			            (MyObjectBuilder_PhysicalObject) MyObjectBuilderSerializer.CreateNewObject(SelectedType);
+			        MyObjectBuilder_InventoryItem inventoryItem = new MyObjectBuilder_InventoryItem
+			        {
+			            Amount = amount,
+			            Content = content
+			        };
 
-				InventoryContainer.NewEntry(newItem);
-
+			        if (InventoryContainer.CanItemsBeAdded(amount, SelectedType))
+			        {
+			            InventoryContainer.AddItems(amount, inventoryItem.Content);
+			        }
+			    });
 				Close();
 			}
 			catch (Exception ex)

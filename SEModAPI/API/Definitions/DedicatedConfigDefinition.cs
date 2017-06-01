@@ -1,3 +1,15 @@
+using System.Reflection;
+using System.Text;
+using NLog;
+using Sandbox.Definitions;
+using Sandbox.Engine.Multiplayer;
+using SpaceEngineers.Game;
+using SteamSDK;
+using VRage.Game;
+using VRage.Library.Utils;
+using VRage.Serialization;
+using VRage.Utils;
+
 namespace SEModAPI.API.Definitions
 {
 	using System;
@@ -11,25 +23,57 @@ namespace SEModAPI.API.Definitions
 	using System.Windows.Forms.Design;
 	using System.Xml;
 	using System.Xml.Serialization;
-	using Sandbox.Common.ObjectBuilders;
+	using global::Sandbox.Common.ObjectBuilders;
 	using VRage.ObjectBuilders;
 
 	[DataContract]
 	public class DedicatedConfigDefinition
 	{
-		private readonly MyConfigDedicatedData<MyObjectBuilder_SessionSettings> _definition;
+        public static readonly Logger BaseLog = LogManager.GetLogger("BaseLog");
+        private readonly MyConfigDedicatedData<MyObjectBuilder_SessionSettings> _definition;
+        
+        //this is here only so the block limit config screen can get and set this data
+        [Browsable(false)]
+	    public static Dictionary<string, short> Limits { get; set; }
 
 		public DedicatedConfigDefinition( MyConfigDedicatedData<MyObjectBuilder_SessionSettings> definition )
 		{
 			_definition = definition;
+            //Limits = definition.SessionSettings.BlockTypeLimits.Dictionary;
+		    var dic = definition.SessionSettings.GetType().GetField("BlockTypeLimits", BindingFlags.Public | BindingFlags.Instance)?.GetValue(definition.SessionSettings) as SerializableDictionary<string, short>;
+		    Limits = dic?.Dictionary;
 		}
 
-		#region "Properties"
+        #region "Properties"
+        private string chatname = "Server";
+        // I'll figure out how to save this later. For now it's hardcoded to "Server"
+        /// <summary>
+        /// Get or set the server's name
+        /// </summary>
+        [DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Chat messages sent by the server will show this name. You MUST have the Essentials client mod installed for this to work. " +
+            "\r\nNote: This value isn't saved between sessions. This is set separately from Essentials, you may want to change them to match." )]
+        [Category( "Extender Settings" )]
+        [DisplayName( "Server Chat Name" )]
+        public string ServerChatName
+        {
+            get
+            {
+                return chatname;
+            }
+            set
+            {
+                chatname = value;
+            }
+        }
+        
 
-		/// <summary>
-		/// Get or set the server's name
-		/// </summary>
-		[DataMember]
+        /// <summary>
+        /// Get or set the server's name
+        /// </summary>
+        [DataMember]
 		[Browsable( true )]
 		[ReadOnly( false )]
 		[Description( "Get or set the server's name" )]
@@ -249,7 +293,7 @@ namespace SEModAPI.API.Definitions
 		[DataMember]
 		[Browsable( true )]
 		[ReadOnly( false )]
-		[Description( "Get or set the maximum number of players" )]
+		[Description( "Get or set the maximum number of players. This can be changed in real time" )]
 		[Category( "Server Settings" )]
 		[DisplayName( "Player Limit" )]
 		public short MaxPlayers
@@ -259,6 +303,9 @@ namespace SEModAPI.API.Definitions
 			{
 				if ( _definition.SessionSettings.MaxPlayers == value ) return;
 				_definition.SessionSettings.MaxPlayers = value;
+
+			    if (MyMultiplayer.Static != null)
+			        MyMultiplayer.Static.MemberLimit = value;
 			}
 		}
 
@@ -341,6 +388,8 @@ namespace SEModAPI.API.Definitions
 			}
 		}
 
+        /*
+         * this property is marked obsolete internally
 		/// <summary>
 		/// Determine whether the server will save regularly the sector
 		/// </summary>
@@ -360,6 +409,7 @@ namespace SEModAPI.API.Definitions
 				_definition.SessionSettings.AutoSave = value;
 			}
 		}
+        */
 
 		/// <summary>
 		/// Get or set the minutes between autosaving the world
@@ -374,12 +424,24 @@ namespace SEModAPI.API.Definitions
 		public uint AutoSaveInMinutes
 		{
 			get { return _definition.SessionSettings.AutoSaveInMinutes; }
-			set
-			{
-				if ( _definition.SessionSettings.AutoSaveInMinutes == value ) return;
-				_definition.SessionSettings.AutoSaveInMinutes = value;
-			}
+			set { _definition.SessionSettings.AutoSaveInMinutes = value; }
 		}
+
+        /// <summary>
+        /// Get or set the number of auto-backup
+        /// </summary>
+        [DataMember]
+        [Browsable(true)]
+        [ReadOnly(false)]
+        [Description("The max number of automatic backups the server keeps.")]
+        [Category("Server Settings")]
+        [DisplayName("Max Backup Count")]
+        [DefaultValue(5)]
+        public short MaxBackupSaves
+	    {
+	        get { return _definition.SessionSettings.MaxBackupSaves; }
+            set { _definition.SessionSettings.MaxBackupSaves = value; }
+	    }
 
 		/// <summary>
 		/// Determine whether the weapons are functional
@@ -518,7 +580,7 @@ namespace SEModAPI.API.Definitions
 		[DataMember]
 		[Browsable( true )]
 		[ReadOnly( false )]
-		[Description( "Determine whether spectator mode is enable" )]
+		[Description( "Determine whether spectator mode is enabled" )]
 		[Category( "Global Settings" )]
 		[DisplayName( "Allow Spectators" )]
 		[DefaultValue( true )]
@@ -532,6 +594,7 @@ namespace SEModAPI.API.Definitions
 			}
 		}
 
+        /*
 		/// <summary>
 		/// Get or set whether the server will automatically remove debris
 		/// </summary>
@@ -551,6 +614,7 @@ namespace SEModAPI.API.Definitions
 				_definition.SessionSettings.RemoveTrash = value;
 			}
 		}
+        */
 
 		/// <summary>
 		/// Get or set the world borders. Ships and players cannot go further than this
@@ -710,7 +774,7 @@ namespace SEModAPI.API.Definitions
 				_definition.SessionSettings.EnableIngameScripts = value;
 			}
 		}
-
+        /*
 		/// <summary>
 		/// Get or set the Scenario's TypeId
 		/// </summary>
@@ -729,7 +793,8 @@ namespace SEModAPI.API.Definitions
 				_definition.Scenario.TypeId = value;
 			}
 		}
-
+        */
+        /*
 		/// <summary>
 		/// Get or set the scenario's subtype Id
 		/// </summary>
@@ -744,11 +809,26 @@ namespace SEModAPI.API.Definitions
 			get { return _definition.Scenario.SubtypeId; }
 			set
 			{
-				if ( _definition.Scenario.SubtypeId == value ) return;
-				_definition.Scenario.SubtypeId = value;
+			    if ( MyDefinitionManager.Static.GetScenarioDefinitions().Count == 0 )
+			        MyDefinitionManager.Static.LoadScenarios();
+
+                var sb = new StringBuilder();
+			    foreach ( var scenario in MyDefinitionManager.Static.GetScenarioDefinitions() )
+			    {
+			        if ( !scenario.Public )
+			            continue;
+
+			        sb.AppendLine( scenario.Id.SubtypeName );
+			        if ( scenario.Id.SubtypeName == value )
+			        {
+			            _definition.Scenario = scenario.Id;
+			            return;
+			        }
+			    }
+                throw new ArgumentException($"{value} is not a valid scenario definition type! Try one of these:\r\n{sb}");
 			}
 		}
-
+        */
 		/// <summary>
 		/// Get or set the path of the world to load
 		/// </summary>
@@ -1034,21 +1114,514 @@ namespace SEModAPI.API.Definitions
 			}
 		}
 
-		#endregion
-
-		#region "Methods"
+		/// <summary>
+		/// Get or set the EnableRespawnShips setting.
+		/// </summary>
+		[DataMember]
+		[Browsable( true )]
+		[ReadOnly( false )]
+		[Description( "Get or set the EnableRespawnShips setting." )]
+		[Category( "World Settings" )]
+		[DisplayName( "Enable Respawn Ships" )]
+		[DefaultValue( false )]
+		public bool DisableRespawnShips
+		{
+			get { return _definition.SessionSettings.EnableRespawnShips; }
+			set
+			{
+				if ( _definition.SessionSettings.EnableRespawnShips != value )
+					_definition.SessionSettings.EnableRespawnShips = value;
+			}
+		}
 
 		/// <summary>
-		/// Load the dedicated server configuration file
+		/// Get or set the SpawnWithTools setting.
 		/// </summary>
-		/// <param name="fileInfo">Path to the configuration file</param>
-		/// <exception cref="FileNotFoundException">Thrown if configuration file cannot be found at the path specified.</exception>
-		/// <returns></returns>
-		/// <exception cref="ConfigurationErrorsException">Configuration file not understood. See inner exception for details. Ignore configuration file line number in outer exception.</exception>
-		public static MyConfigDedicatedData<MyObjectBuilder_SessionSettings> Load( FileInfo fileInfo )
+		[DataMember]
+		[Browsable( true )]
+		[ReadOnly( false )]
+		[Description( "Get or set the SpawnWithTools setting." )]
+		[Category( "World Settings" )]
+		[DisplayName( "Spawn With Tools" )]
+		[DefaultValue( true )]
+		public bool SpawnWithTools
 		{
-			object fileContent;
+			get { return _definition.SessionSettings.SpawnWithTools; }
+			set
+			{
+				if ( _definition.SessionSettings.SpawnWithTools != value )
+					_definition.SessionSettings.SpawnWithTools = value;
+			}
+		}
 
+		/// <summary>
+		/// Get or set the EnableJetpack setting.
+		/// </summary>
+		[DataMember]
+		[Browsable( true )]
+		[ReadOnly( false )]
+		[Description( "Enable or disable jetpack." )]
+		[Category( "World Settings" )]
+		[DisplayName( "Enable Jetpack" )]
+		[DefaultValue( true )]
+		public bool EnableJetpack
+		{
+			get { return _definition.SessionSettings.EnableJetpack; }
+			set
+			{
+				if ( _definition.SessionSettings.EnableJetpack != value )
+					_definition.SessionSettings.EnableJetpack = value;
+			}
+		}
+
+		/// <summary>
+		/// Get or set the EnableSunRotation setting.
+		/// </summary>
+		[DataMember]
+		[Browsable( true )]
+		[ReadOnly( false )]
+		[Description( "Enable or disable sun rotation." )]
+		[Category( "World Settings" )]
+		[DisplayName( "Sun Rotation Enabled" )]
+		[DefaultValue( true )]
+		public bool EnableSunRotation
+		{
+			get { return _definition.SessionSettings.EnableSunRotation; }
+			set
+			{
+				if ( _definition.SessionSettings.EnableSunRotation != value )
+					_definition.SessionSettings.EnableSunRotation = value;
+			}
+		}
+
+		/// <summary>
+		/// Get or set the SunRotationIntervalMinutes setting.
+		/// </summary>
+		[DataMember]
+		[Browsable( true )]
+		[ReadOnly( false )]
+		[Description( "Set the time, in minutes, it takes for the sun to make a complete rotation around the skybox. Only effective if sun rotation is enabled." )]
+		[Category( "World Settings" )]
+		[DisplayName( "Sun Rotation Interval" )]
+		[DefaultValue( 240f )]
+		public float SunRotationIntervalMinutes
+		{
+			get { return _definition.SessionSettings.SunRotationIntervalMinutes; }
+			set
+			{
+				if ( _definition.SessionSettings.SunRotationIntervalMinutes != value )
+					_definition.SessionSettings.SunRotationIntervalMinutes = value;
+			}
+		}
+
+		/// <summary>
+		/// Get or set the PhysicsIterations setting.
+		/// </summary>
+		[DataMember]
+		[Browsable( true )]
+		[ReadOnly( false )]
+		[Description( "The number of iterations the physics engine uses per update. Be careful modifying this value, as lower values may cause physics instability (read: explosions and death), and higher values may significantly decrease performance." )]
+		[Category( "World Settings" )]
+		[DisplayName( "Physics Iterations" )]
+		[DefaultValue( 4 )]
+		public int PhysicsIterations
+		{
+			get { return _definition.SessionSettings.PhysicsIterations; }
+			set
+			{
+					_definition.SessionSettings.PhysicsIterations = value;
+			}
+		}
+        
+        /// <summary>
+		/// Get or set the Wolves setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Enables or disables Wolves" )]
+        [Category( "World Settings" )]
+        [DisplayName( "Enable Wolves" )]
+        [DefaultValue( false )]
+        public bool EnableCyberhounds
+        {
+            get
+            {
+                return _definition.SessionSettings.EnableWolfs;
+            }
+            set
+            {
+                _definition.SessionSettings.EnableWolfs = value;
+            }
+        }
+        
+        /// <summary>
+		/// Get or set the spiders setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Enables or disables spiders" )]
+        [Category( "World Settings" )]
+        [DisplayName( "Enable Spiders" )]
+        [DefaultValue( true )]
+        public bool EnableSpiders
+        {
+            get
+            {
+                return _definition.SessionSettings.EnableSpiders;
+            }
+            set
+            {
+                _definition.SessionSettings.EnableSpiders = value;
+            }
+        }
+
+        /// <summary>
+		/// Get or set the drones setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Enables or disables drones" )]
+        [Category( "World Settings" )]
+        [DisplayName( "Enable Drones" )]
+        [DefaultValue( true )]
+        public bool EnableDrones
+        {
+            get
+            {
+                return _definition.SessionSettings.EnableDrones;
+            }
+            set
+            {
+                _definition.SessionSettings.EnableDrones = value;
+            }
+        }
+
+        /// <summary>
+		/// Get or set the voxel destruction setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Enables or disables voxel destruction" )]
+        [Category( "World Settings" )]
+        [DisplayName( "Enable Voxel Destruction" )]
+        [DefaultValue( false )]
+        public bool EnableVoxelDesctruction
+        {
+            get
+            {
+                return _definition.SessionSettings.EnableVoxelDestruction;
+            }
+            set
+            {
+                _definition.SessionSettings.EnableVoxelDestruction = value;
+            }
+        }
+
+        /// <summary>
+		/// Get or set the Enable Flora setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Enables or disables flora" )]
+        [Category( "World Settings" )]
+        [DisplayName( "Enable Flora" )]
+        [DefaultValue( true )]
+        public bool EnableFlora
+        {
+            get
+            {
+                return _definition.SessionSettings.EnableFlora;
+            }
+            set
+            {
+                _definition.SessionSettings.EnableFlora = value;
+            }
+        }
+
+        /// <summary>
+		/// Get or set the Flora Density Multiplier setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Sets the Flora Density Multiplier setting" )]
+        [Category( "World Settings" )]
+        [DisplayName( "FloraDensityMultiplier" )]
+        [DefaultValue( 1.00 )]
+        public float FloraDensityMultiplier
+        {
+            get
+            {
+                return _definition.SessionSettings.FloraDensityMultiplier;
+            }
+            set
+            {
+                _definition.SessionSettings.FloraDensityMultiplier = value;
+            }
+        }
+
+        /// <summary>
+		/// Get or set the Flora Density setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Sets Flora Density" )]
+        [Category( "World Settings" )]
+        [DisplayName( "Flora Density" )]
+        [DefaultValue( 20 )]
+        public int FloraDensity
+        {
+            get
+            {
+                return _definition.SessionSettings.FloraDensity;
+            }
+            set
+            {
+                _definition.SessionSettings.FloraDensity = value;
+            }
+        }
+
+	    /// <summary>
+		/// Get or set the Convert to Station setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Enables or disables Convert Ship to Station button." )]
+        [Category( "World Settings" )]
+        [DisplayName( "Enable Convert to Station" )]
+        [DefaultValue( true )]
+        public bool EnableConvertToStation
+        {
+            get
+            {
+                return _definition.SessionSettings.EnableConvertToStation;
+            }
+            set
+            {
+                _definition.SessionSettings.EnableConvertToStation = value;
+            }
+        }
+
+        
+        /// <summary>
+        /// Get or set the Voxel Support setting.
+        /// </summary>
+        [DataMember]
+        [Browsable(true)]
+        [ReadOnly(false)]
+        [Description("Enables or disables Voxel Support.")]
+        [Category("World Settings")]
+        [DisplayName("Enable Station Voxel Support")]
+        [DefaultValue(true)]
+        public bool EnableVoxelSupport
+        {
+            get
+            {
+                return _definition.SessionSettings.StationVoxelSupport;
+
+                //FieldInfo memberInfo = _definition.SessionSettings.GetType().GetField("StationVoxelSupport", BindingFlags.Instance | BindingFlags.Public);
+                //if ( memberInfo != null )
+                //    return (bool)memberInfo.GetValue( _definition.SessionSettings );
+                //return false;
+            }
+            set
+            {
+                _definition.SessionSettings.StationVoxelSupport = value;
+
+                //FieldInfo memberInfo = _definition.SessionSettings.GetType().GetField("StationVoxelSupport", BindingFlags.Instance | BindingFlags.Public);
+                //if (memberInfo != null)
+                //    memberInfo.SetValue(_definition.SessionSettings, value);
+            }
+        }
+        
+
+        /// <summary>
+        /// Get or set the Enable 3rd Person View setting.
+        /// </summary>
+        [DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Enables or disables 3rd Person View" )]
+        [Category( "World Settings" )]
+        [DisplayName( "Enable 3rd Person View" )]
+        [DefaultValue( true )]
+        public bool Enable3rdPersonView
+        {
+            get
+            {
+                return _definition.SessionSettings.Enable3rdPersonView;
+            }
+            set
+            {
+                _definition.SessionSettings.Enable3rdPersonView = value;
+            }
+        }
+
+        /// <summary>
+		/// Get or set the Enable Block Destruction setting.
+		/// </summary>
+		[DataMember]
+        [Browsable( true )]
+        [ReadOnly( false )]
+        [Description( "Enables or disables Block Destruction" )]
+        [Category( "World Settings" )]
+        [DisplayName( "Enable Block Destruction" )]
+        [DefaultValue( true )]
+        public bool EnableBlockDestruction
+        {
+            get
+            {
+                return _definition.SessionSettings.DestructibleBlocks;
+            }
+            set
+            {
+                _definition.SessionSettings.DestructibleBlocks = value;
+            }
+        }
+
+        /// <summary>
+		/// Get or set the Enable Airtightness setting.
+		/// </summary>
+		[DataMember]
+        [Browsable(true)]
+        [ReadOnly(false)]
+        [Description("Enables or disables Airtightness.")]
+        [Category("World Settings")]
+        [DisplayName("Enable Airtightness")]
+        [DefaultValue(true)]
+        public bool EnableAirtightness
+        {
+            get { return _definition.SessionSettings.EnableOxygenPressurization; }
+            set { _definition.SessionSettings.EnableOxygenPressurization = value; }
+        }
+
+	    [DataMember]
+	    [Browsable(true)]
+	    [ReadOnly(false)]
+	    [Description("Enables or disables block limits.")]
+	    [Category("Block limits")]
+	    [DisplayName("Enable Block limits")]
+	    [DefaultValue(true)]
+	    public bool EnableBlockLimits
+	    {
+	        get
+	        {
+                return _definition.SessionSettings.EnableBlockLimits;
+	        }
+
+	        set
+	        {
+                _definition.SessionSettings.EnableBlockLimits = value;
+            }
+	    }
+
+	    [DataMember]
+	    [Browsable(true)]
+	    [ReadOnly(false)]
+	    [Description("Lets players delete blocks they own remotely.")]
+	    [Category("Block limits")]
+	    [DisplayName("Enable Remote Block Removal")]
+	    [DefaultValue(true)]
+	    public bool EnableRemoval
+	    {
+	        get
+	        {
+                return _definition.SessionSettings.EnableRemoteBlockRemoval;
+            }
+
+            set
+            {
+                _definition.SessionSettings.EnableRemoteBlockRemoval = value;
+            }
+        }
+
+        [DataMember]
+        [Browsable(true)]
+        [ReadOnly(false)]
+        [Description("Max number of blocks per player.")]
+        [Category("Block limits")]
+        [DisplayName("Max Blocks Per Player")]
+        [DefaultValue(true)]
+        public int MaxBlocksPerPlayer
+        {
+            get { return _definition.SessionSettings.MaxBlocksPerPlayer; }
+            set { _definition.SessionSettings.MaxBlocksPerPlayer = value; }
+        }
+
+        [DataMember]
+        [Browsable(true)]
+        [ReadOnly(false)]
+        [Description("Max number of blocks per grid.")]
+        [Category("Block limits")]
+        [DisplayName("Max Blocks Per Grid")]
+        [DefaultValue(true)]
+        public int MaxBlocksPerGrid
+        {
+            get { return _definition.SessionSettings.MaxGridSize; }
+            set { _definition.SessionSettings.MaxGridSize = value; }
+        }
+
+        [Browsable(true)]
+	    [ReadOnly(false)]
+	    [Description("Opens a window to configure block limits.")]
+	    [Category("Block limits")]
+	    [DisplayName("Block limits")]
+	    [Editor(typeof(LimitEditButton), typeof(UITypeEditor))]
+	    public string BlockLimits
+	    {
+	        get { return "Press the button to edit settings ---->"; }
+	    }
+
+	    [DataMember]
+	    [Browsable(true)]
+	    [ReadOnly(false)]
+	    [Description("Enables or disables the scripter role")]
+	    [Category("World Settings")]
+	    [DisplayName("Enable Scripter Role")]
+	    [DefaultValue(true)]
+	    public bool EnableScripterRole
+	    {
+	        get { return _definition.SessionSettings.EnableScripterRole; }
+
+	        set { _definition.SessionSettings.EnableScripterRole = value; }
+	    }
+
+        // <summary>
+        /// Get or set the server's description
+        /// </summary>
+        [DataMember]
+        [Browsable(true)]
+        [ReadOnly(false)]
+        [Description("Get or set the server description shown in server browser")]
+        [Category("Server Settings")]
+        [DisplayName("Server Description")]
+        public string ServerDescription
+        {
+            get { return _definition.ServerDescription; }
+            set
+            {
+                _definition.ServerDescription = value;
+            }
+        }
+        #endregion
+
+        #region "Methods"
+        /// <summary>
+        /// Load the dedicated server configuration file
+        /// </summary>
+        /// <param name="fileInfo">Path to the configuration file</param>
+        /// <exception cref="FileNotFoundException">Thrown if configuration file cannot be found at the path specified.</exception>
+        /// <returns></returns>
+        /// <exception cref="ConfigurationErrorsException">Configuration file not understood. See inner exception for details. Ignore configuration file line number in outer exception.</exception>
+        public static MyConfigDedicatedData<MyObjectBuilder_SessionSettings> Load( FileInfo fileInfo )
+        {
 			string filePath = fileInfo.FullName;
 
 			if ( !File.Exists( filePath ) )
@@ -1057,11 +1630,13 @@ namespace SEModAPI.API.Definitions
 			}
 
 			try
-			{
-				using ( TextReader rdr = File.OpenText( filePath ) )
+            {
+                using ( TextReader rdr = File.OpenText( filePath ) )
 				{
 					XmlSerializer deserializer = new XmlSerializer( typeof( MyConfigDedicatedData<MyObjectBuilder_SessionSettings> ) );
 					MyConfigDedicatedData<MyObjectBuilder_SessionSettings> config = (MyConfigDedicatedData<MyObjectBuilder_SessionSettings>)deserializer.Deserialize( rdr );
+                    if(config == null)
+                        throw new Exception("Unknown Error");
 					return config;
 				}
 			}
@@ -1075,8 +1650,13 @@ namespace SEModAPI.API.Definitions
 		{
 			if ( fileInfo == null ) return false;
 
-			//Save the definitions container out to the file
-			try
+            //hack
+            //_definition.SessionSettings.BlockTypeLimits = new SerializableDictionary<string, short>(DedicatedConfigDefinition.Limits);
+		    var dic = _definition.SessionSettings.GetType().GetField("BlockTypeLimits", BindingFlags.Public | BindingFlags.Instance);
+            if(dic!=null)
+                dic.SetValue(_definition.SessionSettings, new SerializableDictionary<string, short>(Limits));
+            //Save the definitions container out to the file
+            try
 			{
 				using ( XmlTextWriter xmlTextWriter = new XmlTextWriter( fileInfo.FullName, null ) )
 				{
@@ -1087,8 +1667,9 @@ namespace SEModAPI.API.Definitions
 					serializer.Serialize( xmlTextWriter, _definition );
 				}
 			}
-			catch
+			catch(Exception ex)
 			{
+                BaseLog.Error( ex );
 				throw new GameInstallationInfoException( GameInstallationInfoExceptionState.ConfigFileCorrupted, fileInfo.FullName );
 			}
 

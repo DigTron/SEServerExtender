@@ -1,14 +1,17 @@
-﻿namespace SEModAPIInternal.API.Common
+﻿using VRage.Game;
+
+namespace SEModAPIInternal.API.Common
 {
 	using System;
-	using System.Collections.Generic;
 	using System.IO;
 	using System.Reflection;
 	using System.Threading;
+	using Sandbox;
 	using Sandbox.Common.ObjectBuilders;
+	using SEModAPI.API;
+	using SEModAPI.API.Utility;
 	using SEModAPIInternal.API.Entity;
 	using SEModAPIInternal.Support;
-	using VRage.FileSystem;
 	using VRage.ObjectBuilders;
 
 	public class SandboxGameAssemblyWrapper
@@ -19,7 +22,6 @@
 
 		protected static SandboxGameAssemblyWrapper m_instance;
 		protected static Thread m_gameThread;
-		protected static string m_instanceName;
 
 		protected bool m_isGameLoaded;
 
@@ -39,8 +41,8 @@
 
 		public static string MainGameInstanceField = "Static";
 		public static string MainGameConfigContainerField = "ConfigDedicated";
-		public static string MainGameIsLoadedField = "isFirstUpdateDone";
-		public static string MainGameLoadingCompleteActionField = "OnSessionReady";
+		public static string IsFirstUpdateDoneField = "isFirstUpdateDone";
+		public static string MainGameOnGameLoadedEvent = "OnGameLoaded";
 		public static string MainGameMyLogField = "Log";
 
 		/////////////////////////////////////////////////////////////////////////////
@@ -67,10 +69,10 @@
 		public static string EntityBaseObjectFactoryNamespace = "Sandbox.Game.Entities";
 		public static string EntityBaseObjectFactoryClass = "MyEntityFactory";
 		public static string EntityBaseObjectFactoryGetBuilderFromEntityMethod = "CreateObjectBuilder";
-		
+
 		////////////////////////////////////////////////////////////////////////////////
 		private const string MyAPIGatewayNamespace = "Sandbox.ModAPI";
-		
+
 		private const string MyAPIGatewayClass = "MyAPIGateway";
 
 		#endregion "Attributes"
@@ -80,9 +82,8 @@
 		protected SandboxGameAssemblyWrapper( )
 		{
 			m_instance = this;
-			IsDebugging = false;
-			UseCommonProgramData = false;
-			IsInSafeMode = false;
+			ExtenderOptions.UseCommonProgramData = false;
+			ExtenderOptions.IsInSafeMode = false;
 			m_gameThread = null;
 
 			string assemblyPath = Path.Combine( AppDomain.CurrentDomain.BaseDirectory, "Sandbox.Game.dll" );
@@ -111,12 +112,6 @@
 				return m_instance;
 			}
 		}
-
-		public static bool IsDebugging { get; set; }
-
-		public static bool UseCommonProgramData { get; set; }
-
-		public static bool IsInSafeMode { get; set; }
 
 		public static Type MainGameType
 		{
@@ -163,24 +158,6 @@
 			}
 		}
 
-		public static Object MainGame
-		{
-			get
-			{
-				try
-				{
-					Object mainGame = BaseObject.GetStaticFieldValue( MainGameType, MainGameInstanceField );
-
-					return mainGame;
-				}
-				catch ( Exception ex )
-				{
-					ApplicationLog.BaseLog.Error( ex );
-					return null;
-				}
-			}
-		}
-
 		public static Type APIGatewayType
 		{
 			get
@@ -188,44 +165,6 @@
 				Type type = Instance.GetAssemblyType( MyAPIGatewayNamespace, MyAPIGatewayClass );
 				return type;
 			}
-		}
-
-		public bool IsGameStarted
-		{
-			get
-			{
-				try
-				{
-					if ( MainGame == null )
-						return false;
-
-					if ( !m_isGameLoaded )
-					{
-						bool someValue = (bool)BaseObject.GetEntityFieldValue( MainGame, MainGameIsLoadedField );
-						if ( someValue )
-						{
-							m_isGameLoaded = true;
-
-							return true;
-						}
-
-						return false;
-					}
-
-					return true;
-				}
-				catch ( Exception ex )
-				{
-					ApplicationLog.BaseLog.Error( ex );
-					return false;
-				}
-			}
-		}
-
-		public static string InstanceName
-		{
-			get { return m_instanceName; }
-			set { m_instanceName = value; }
 		}
 
 		#endregion "Properties"
@@ -254,20 +193,51 @@
 				if ( type == null )
 					throw new Exception( "Could not find internal type for MainGame" );
 				bool result = true;
-				result &= BaseObject.HasMethod( type, MainGameEnqueueActionMethod );
-				result &= BaseObject.HasMethod( type, MainGameGetTimeMillisMethod );
-				result &= BaseObject.HasMethod( type, MainGameExitMethod );
-				result &= BaseObject.HasMethod( type, MainGameDisposeMethod );
-				result &= BaseObject.HasField( type, MainGameInstanceField );
-				result &= BaseObject.HasField( type, MainGameConfigContainerField );
-				result &= BaseObject.HasField( type, MainGameIsLoadedField );
-				result &= BaseObject.HasField( type, MainGameLoadingCompleteActionField );
-				result &= BaseObject.HasField( type, MainGameMyLogField );
+				if ( !Reflection.HasMethod( type, MainGameEnqueueActionMethod ) )
+				{
+					result = false;
+					ApplicationLog.BaseLog.Error( "Could not find method {0}", MainGameEnqueueActionMethod );
+				}
+				if ( !Reflection.HasMethod( type, MainGameGetTimeMillisMethod ) )
+				{
+					result = false;
+					ApplicationLog.BaseLog.Error( "Could not find method {0}", MainGameGetTimeMillisMethod );
+				}
+				if ( !Reflection.HasMethod( type, MainGameExitMethod ) )
+				{
+					result = false;
+					ApplicationLog.BaseLog.Error( "Could not find method {0}", MainGameExitMethod );
+				}
+				if ( !Reflection.HasMethod( type, MainGameDisposeMethod ) )
+				{
+					result = false;
+					ApplicationLog.BaseLog.Error( "Could not find method {0}", MainGameDisposeMethod );
+				}
+				if ( !Reflection.HasField( type, MainGameInstanceField ) )
+				{
+					result = false;
+					ApplicationLog.BaseLog.Error( "Could not find method {0}", MainGameInstanceField );
+				}
+				if ( !Reflection.HasField( type, MainGameConfigContainerField ) )
+				{
+					result = false;
+					ApplicationLog.BaseLog.Error( "Could not find method {0}", MainGameConfigContainerField );
+				}
+				if ( !Reflection.HasField( type, IsFirstUpdateDoneField ) )
+				{
+					result = false;
+					ApplicationLog.BaseLog.Error( "Could not find method {0}", IsFirstUpdateDoneField );
+				}
+				if ( type.GetEvent( "OnGameLoaded" ) == null )
+				{
+					result = false;
+					ApplicationLog.BaseLog.Error( "Could not find event {0}", MainGameOnGameLoadedEvent );
+				}
 
 				Type type2 = ServerCoreType;
 				if ( type2 == null )
 					throw new Exception( "Could not find physics manager type for ServerCore" );
-				result &= BaseObject.HasField( type2, ServerCoreNullRenderField );
+				result &= Reflection.HasField( type2, ServerCoreNullRenderField );
 
 				Type type3 = GameConstantsType;
 				if ( type3 == null )
@@ -312,45 +282,14 @@
 			}
 		}
 
+		[Obsolete( "Use MySandboxGame.Static.Invoke instead" )]
 		public bool EnqueueMainGameAction( Action action )
 		{
 			try
 			{
-				if ( Thread.CurrentThread == m_gameThread )
-				{
-					action( );
-					return true;
-				}
+				MySandboxGame.Static.Invoke( action );
 
-				BaseObject.InvokeEntityMethod( MainGame, MainGameEnqueueActionMethod, new object[ ] { action } );
-
-				if ( IsDebugging )
-				{
-					UpdateProfile( );
-				}
-
-				return true;
-			}
-			catch ( Exception ex )
-			{
-				ApplicationLog.BaseLog.Error( ex );
-				return false;
-			}
-		}
-
-		public bool EnqueueMainGameAction<T>( Action<T> action, T arg )
-		{
-			try
-			{
-				if ( Thread.CurrentThread == m_gameThread )
-				{
-					action( arg );
-					return true;
-				}
-
-				BaseObject.InvokeEntityMethod( MainGame, MainGameEnqueueActionMethod, new object[ ] { action, arg } );
-
-				if ( IsDebugging )
+				if ( ExtenderOptions.IsDebugging )
 				{
 					UpdateProfile( );
 				}
@@ -373,7 +312,7 @@
 			{
 				m_averageQueuedActions = m_countQueuedActions / timeSinceLastProfilingOutput.TotalSeconds;
 
-				ApplicationLog.BaseLog.Info( "Average actions queued per second: {0}", Math.Round( m_averageQueuedActions, 2 ) );
+				ApplicationLog.BaseLog.Info( "Average actions queued per second: {0:N2}", m_averageQueuedActions );
 
 				m_countQueuedActions = 0;
 				m_lastProfilingOutput = DateTime.Now;
@@ -383,26 +322,17 @@
 		public delegate void GameActionCallback( Object state );
 
 		public bool BeginGameAction( Action action, GameActionCallback callback, Object state )
-		{
-			try
+        {
+            if (m_gameThread == Thread.CurrentThread)
+                throw new ThreadStateException("Invoking action on game thread from inside game thread! This will freeze the server!");
+
+            try
 			{
 				ThreadPool.QueueUserWorkItem( o =>
 				{
 					AutoResetEvent e = new AutoResetEvent( false );
 
-					/*
-					MyAPIGateway.Utilities.InvokeOnGameThread(() =>
-					{
-						if (m_gameThread == null)
-						{
-							m_gameThread = Thread.CurrentThread;
-						}
-
-						action();
-						e.Set();
-					});
-					 */ 
-					Instance.EnqueueMainGameAction(() =>
+					MySandboxGame.Static.Invoke( ( ) =>
 					{
 						if ( m_gameThread == null )
 						{
@@ -412,7 +342,7 @@
 						action( );
 						e.Set( );
 					} );
-					
+
 					e.WaitOne( );
 
 					if ( callback != null )
@@ -432,23 +362,14 @@
 
 		public bool GameAction( Action action )
 		{
+		    if (m_gameThread == Thread.CurrentThread)
+		        throw new ThreadStateException("Invoking action on game thread from inside game thread! This will freeze the server!");
+
 			try
 			{
 				AutoResetEvent e = new AutoResetEvent( false );
-				/*
-				MyAPIGateway.Utilities.InvokeOnGameThread(() =>
-				{
-					if (m_gameThread == null)
-					{
-						m_gameThread = Thread.CurrentThread;
-					}
 
-					action();
-					e.Set();
-				});
-				*/
-
-				Instance.EnqueueMainGameAction( ( ) =>
+				MySandboxGame.Static.Invoke( ( ) =>
 				{
 					if ( m_gameThread == null )
 					{
@@ -469,36 +390,6 @@
 			}
 		}
 
-		public void ExitGame( )
-		{
-			try
-			{
-				ApplicationLog.BaseLog.Info( "Exiting" );
-				/*
-				GameAction(new Action(delegate()
-				{
-					BaseObject.InvokeEntityMethod(MainGame, "Dispose");
-				}));
-				 */
-			}
-			catch ( Exception ex )
-			{
-				ApplicationLog.BaseLog.Error( ex );
-			}
-		}
-
-		public void SetNullRender( bool nullRender )
-		{
-			try
-			{
-				BaseObject.SetStaticFieldValue( ServerCoreType, ServerCoreNullRenderField, nullRender );
-			}
-			catch ( Exception ex )
-			{
-				ApplicationLog.BaseLog.Error( ex );
-			}
-		}
-
 		public Type GetAssemblyType( string namespaceName, string className )
 		{
 			try
@@ -516,6 +407,8 @@
 
 		public int GetMainGameMilliseconds( )
 		{
+		    return MySandboxGame.TotalGamePlayTimeInMilliseconds;
+            /*
 			try
 			{
 				int gameTimeMillis = (int)BaseObject.InvokeStaticMethod( MainGameType, MainGameGetTimeMillisMethod );
@@ -527,78 +420,7 @@
 				ApplicationLog.BaseLog.Error( ex );
 				return 0;
 			}
-		}
-
-		public String GetUserDataPath( string instanceName = "" )
-		{
-			string userDataPath;
-			if ( UseCommonProgramData && instanceName != string.Empty )
-			{
-				userDataPath = Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.CommonApplicationData ), "SpaceEngineersDedicated", instanceName );
-			}
-			else
-			{
-				userDataPath = Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.ApplicationData ), "SpaceEngineersDedicated" );
-			}
-
-			return userDataPath;
-		}
-
-		public void InitMyFileSystem( string instanceName = "", bool reset = true )
-		{
-			string contentPath = Path.Combine( new FileInfo( MyFileSystem.ExePath ).Directory.FullName, "Content" );
-			string userDataPath = Instance.GetUserDataPath( instanceName );
-
-			if ( reset )
-			{
-				MyFileSystem.Reset( );
-			}
-			else
-			{
-				try
-				{
-					if ( !string.IsNullOrWhiteSpace( MyFileSystem.ContentPath ) )
-						return;
-					if ( !string.IsNullOrWhiteSpace( MyFileSystem.UserDataPath ) )
-						return;
-				}
-				catch ( Exception )
-				{
-					//Do nothing
-				}
-			}
-
-			MyFileSystem.Init( contentPath, userDataPath );
-			MyFileSystem.InitUserSpecific( null );
-
-			m_instanceName = instanceName;
-		}
-
-		public List<string> GetCommonInstanceList( )
-		{
-			List<string> result = new List<string>( );
-
-			try
-			{
-				string commonPath = Path.Combine( Environment.GetFolderPath( Environment.SpecialFolder.CommonApplicationData ), "SpaceEngineersDedicated" );
-				if ( Directory.Exists( commonPath ) )
-				{
-					string[ ] subDirectories = Directory.GetDirectories( commonPath );
-					foreach ( string fullInstancePath in subDirectories )
-					{
-						string[ ] directories = fullInstancePath.Split( new[ ] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar } );
-						string instanceName = directories[ directories.Length - 1 ];
-
-						result.Add( instanceName );
-					}
-				}
-			}
-			catch ( Exception ex )
-			{
-				ApplicationLog.BaseLog.Error(  ex.ToString( ) );
-			}
-
-			return result;
+            */
 		}
 
 		#endregion "Methods"
